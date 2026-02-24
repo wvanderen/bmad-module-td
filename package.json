@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@bmad-method/td-integration",
+  "name": "@wvanderen/td-integration",
   "version": "0.1.1",
   "description": "BMAD expansion module for td CLI integration - td provides state, BMAD provides structure",
   "keywords": [
