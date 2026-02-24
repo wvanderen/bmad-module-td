@@ -1,0 +1,34 @@
+name: td-story-dev
+description: 'Execute story implementation following the Ralph Wiggum loop - one task at a time with td integration. Use when the user says "dev next task" or "td next" or "implement the next task"'
+
+# Critical variables from config
+config_source: "{project-root}/_bmad/td-integration/config.yaml"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+user_skill_level: "{config_source}:user_skill_level"
+document_output_language: "{config_source}:document_output_language"
+date: system-generated
+
+# Inherit from BMM module
+bmm_config: "{project-root}/_bmad/bmm/config.yaml"
+implementation_artifacts: "{bmm_config}:implementation_artifacts"
+
+# Workflow components
+installed_path: "{project-root}/_bmad/td-integration/workflows/td-story-dev"
+instructions: "{installed_path}/instructions.xml"
+validation: "{installed_path}/checklist.md"
+
+# Data files
+status_mapping: "{project-root}/_bmad/td-integration/data/td-status-mapping.yaml"
+td_ops: "{project-root}/_bmad/td-integration/tasks/td-ops.xml"
+
+# Story and task context
+story_file: ""
+td_epic_id: ""
+td_issue_id: ""
+project_context: "**/project-context.md"
+
+# Session tracking
+session_type: "dev"
+task_index: ""
+task_description: ""

@@ -1,0 +1,65 @@
+name: create-td-story
+description: 'Creates a BMAD story file with full context AND syncs to td as an epic with child task issues. Use when the user says "create the next story" or "create story [story identifier]" with td integration'
+
+# Critical variables from config
+config_source: "{project-root}/_bmad/td-integration/config.yaml"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+document_output_language: "{config_source}:document_output_language"
+user_skill_level: "{config_source}:user_skill_level"
+date: system-generated
+
+# Inherit from BMM module
+bmm_config: "{project-root}/_bmad/bmm/config.yaml"
+planning_artifacts: "{bmm_config}:planning_artifacts"
+implementation_artifacts: "{bmm_config}:implementation_artifacts"
+
+# Workflow components
+installed_path: "{project-root}/_bmad/td-integration/workflows/create-td-story"
+template: "{project-root}/_bmad/td-integration/templates/td-story-template.md"
+instructions: "{installed_path}/instructions.xml"
+validation: "{installed_path}/checklist.md"
+
+# Data files for td integration
+status_mapping: "{project-root}/_bmad/td-integration/data/td-status-mapping.yaml"
+field_schema: "{project-root}/_bmad/td-integration/data/td-field-schema.yaml"
+td_ops: "{project-root}/_bmad/td-integration/tasks/td-ops.xml"
+
+# Variables and inputs
+sprint_status: "{implementation_artifacts}/sprint-status.yaml"
+epics_file: "{planning_artifacts}/epics.md"
+prd_file: "{planning_artifacts}/prd.md"
+architecture_file: "{planning_artifacts}/architecture.md"
+ux_file: "{planning_artifacts}/*ux*.md"
+story_title: ""
+project_context: "**/project-context.md"
+default_output_file: "{implementation_artifacts}/{{story_key}}.md"
+
+# td integration variables (populated during workflow)
+td_epic_id: ""
+td_task_mapping: {}
+sync_timestamp: ""
+sync_status: "initialized"
+
+# Smart input file references - Inherit from BMM create-story
+input_file_patterns:
+  prd:
+    description: "PRD (fallback - epics file should have most content)"
+    whole: "{planning_artifacts}/*prd*.md"
+    sharded: "{planning_artifacts}/*prd*/*.md"
+    load_strategy: "SELECTIVE_LOAD"
+  architecture:
+    description: "Architecture (fallback - epics file should have relevant sections)"
+    whole: "{planning_artifacts}/*architecture*.md"
+    sharded: "{planning_artifacts}/*architecture*/*.md"
+    load_strategy: "SELECTIVE_LOAD"
+  ux:
+    description: "UX design (fallback - epics file should have relevant sections)"
+    whole: "{planning_artifacts}/*ux*.md"
+    sharded: "{planning_artifacts}/*ux*/*.md"
+    load_strategy: "SELECTIVE_LOAD"
+  epics:
+    description: "Enhanced epics+stories file with BDD and source hints"
+    whole: "{planning_artifacts}/*epic*.md"
+    sharded: "{planning_artifacts}/*epic*/*.md"
+    load_strategy: "SELECTIVE_LOAD"
