@@ -1,4 +1,4 @@
-# @bmad-method/td-integration
+# @wvanderen/bmad-module-td
 
 A BMAD Method module for integrating with td CLI task management.
 
@@ -7,6 +7,7 @@ A BMAD Method module for integrating with td CLI task management.
 This module connects BMAD planning artifacts with td CLI for enhanced observability and the Ralph Wiggum development loop.
 
 **Philosophy:** td is state, BMAD is structure
+
 - **BMAD `.md` files** hold structured planning artifacts (epics, stories, architecture)
 - **td issues** hold execution state (status, dependencies, reviews)
 - **sidecar** provides observability
@@ -14,12 +15,14 @@ This module connects BMAD planning artifacts with td CLI for enhanced observabil
 ## Installation
 
 ```bash
-# Via BMad installer
-npx bmad-method install
+# Install the module
+npm install @wvanderen/bmad-module-td
 
-# Or via npm
-npm install @bmad-method/td-integration
+# Register with BMAD (run from your project root)
+npx bmad-method install --custom-content ./node_modules/@wvanderen/bmad-module-td --action update --yes
 ```
+
+**Note:** The `--custom-content` flag is required because this is a community module not yet in the official BMAD registry.
 
 ## Requirements
 
@@ -29,14 +32,14 @@ npm install @bmad-method/td-integration
 
 ## Core Workflows
 
-| Workflow | Command | Description |
-|----------|---------|-------------|
-| create-td-story | `/bmad:td:create-story` | Create story with td epic + task issues |
-| td-dev-next | `/bmad:td:dev-next` | Ralph Wiggum loop - implement next task |
-| td-dev-task | `/bmad:td:dev-task <id>` | Implement specific task by td ID |
-| td-review-story | `/bmad:td:review-story` | Epic-level code review |
-| td-sync | `/bmad:td:sync` | Bidirectional sync story ↔ td |
-| td-status | `/bmad:td:status` | Show story td integration status |
+| Workflow        | Command                  | Description                             |
+| --------------- | ------------------------ | --------------------------------------- |
+| create-td-story | `/bmad:td:create-story`  | Create story with td epic + task issues |
+| td-dev-next     | `/bmad:td:dev-next`      | Ralph Wiggum loop - implement next task |
+| td-dev-task     | `/bmad:td:dev-task <id>` | Implement specific task by td ID        |
+| td-review-story | `/bmad:td:review-story`  | Epic-level code review                  |
+| td-sync         | `/bmad:td:sync`          | Bidirectional sync story ↔ td           |
+| td-status       | `/bmad:td:status`        | Show story td integration status        |
 
 ## Ralph Wiggum Loop
 
