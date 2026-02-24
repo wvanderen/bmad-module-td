@@ -1,0 +1,271 @@
+<workflow>
+  <critical>The workflow execution engine is governed by: {project-root}/_bmad/core/tasks/workflow.xml</critical>
+  <critical>You MUST have already loaded and processed this workflow's workflow.yaml</critical>
+  <critical>Load td operations from: {td_ops}</critical>
+  <critical>Load status mapping from: {status_mapping}</critical>
+
+  <critical>🔄 BIDIRECTIONAL SYNC - Keep story file and td in harmony!</critical>
+
+  <!-- ============================================ -->
+  <!-- STEP 1: Identify Sync Target                -->
+  <!-- ============================================ -->
+  
+  <step n="1" goal="Identify story and td epic to sync">
+    <check if="{{story_file}} and {{td_epic_id}} are provided">
+      <goto anchor="load_states" />
+    </check>
+    
+    <check if="{{story_file}} is provided">
+      <action>Load story file</action>
+      <action>Extract td_epic_id from td Integration section</action>
+      <goto anchor="load_states" />
+    </check>
+    
+    <check if="{{td_epic_id}} is provided">
+      <command>td show {td_epic_id}</command>
+      <action>Extract story_file from metadata</action>
+      <goto anchor="load_states" />
+    </check>
+    
+    <ask>Which story would you like to sync?
+    
+    Provide either:
+    - Story file path (e.g., _bmad-output/stories/1-2-user-auth.md)
+    - td epic ID (e.g., td-abc1)</ask>
+    
+    <anchor id="load_states" />
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 2: Load Both States                     -->
+  <!-- ============================================ -->
+  
+  <step n="2" goal="Load story file state and td state">
+    <action>Load the FULL story file: {{story_file}}</action>
+    
+    <action>Parse story file:
+      - Status field
+      - Tasks/Subtasks with checkboxes
+      - td Integration section (epic ID, task mapping, last sync)
+    </action>
+    
+    <action>Extract story task states:
+      - For each task with [td:issue-id] reference
+      - Store: task_id, checkbox_state ([ ] or [x])
+    </action>
+    
+    <command>td list --parent {td_epic_id} --json</command>
+    
+    <action>Parse td issues:
+      - For each child issue
+      - Store: issue_id, status (open/in_progress/review/closed)
+    </action>
+    
+    <output>📊 **States Loaded**
+    
+    **Story File:** {{story_file}}
+    - Story Status: {{story_status}}
+    - Tasks: {{story_task_count}}
+    
+    **td Epic:** {{td_epic_id}}
+    - Epic Status: {{td_epic_status}}
+    - Issues: {{td_issue_count}}
+    </output>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 3: Detect Drift                         -->
+  <!-- ============================================ -->
+  
+  <step n="3" goal="Compare states and detect discrepancies">
+    <action>Initialize {{drift_report}} = []</action>
+    
+    <action>For each task in td Integration task mapping:</action>
+    
+    <check if="story task is [x] but td issue is NOT closed">
+      <action>Add to drift_report:
+        - type: "story_ahead"
+        - task_id: task_id
+        - td_issue_id: issue_id
+        - story_state: "complete"
+        - td_state: issue_status
+        - message: "Story task marked done but td issue still open"
+      </action>
+    </check>
+    
+    <check if="story task is [ ] but td issue IS closed">
+      <action>Add to drift_report:
+        - type: "td_ahead"
+        - task_id: task_id
+        - td_issue_id: issue_id
+        - story_state: "incomplete"
+        - td_state: "closed"
+        - message: "td issue closed but story task not marked complete"
+      </action>
+    </check>
+    
+    <check if="task has no td reference">
+      <action>Add to drift_report:
+        - type: "missing_td_ref"
+        - task_id: task_id
+        - message: "Task has no td issue reference"
+      </action>
+    </check>
+    
+    <check if="td issue not in task mapping">
+      <action>Add to drift_report:
+        - type: "orphan_td_issue"
+        - td_issue_id: issue_id
+        - message: "td issue has no corresponding task in story"
+      </action>
+    </check>
+    
+    <!-- Story status vs td epic status -->
+    <check if="story status is 'done' but td epic is NOT closed">
+      <action>Add to drift_report:
+        - type: "status_mismatch"
+        - story_state: "done"
+        - td_state: td_epic_status
+        - message: "Story marked done but td epic still open"
+      </action>
+    </check>
+    
+    <action>Set {{drift_count}} = length of drift_report</action>
+    
+    <output>🔍 **Drift Detection Complete**
+    
+    **Discrepancies Found:** {{drift_count}}
+    
+    {{#if drift_count == 0}}
+    ✅ Story file and td are in sync!
+    {{/if}}
+    </output>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 4: Present Drift Report                 -->
+  <!-- ============================================ -->
+  
+  <step n="4" goal="Present drift report to user">
+    <check if="drift_count == 0">
+      <action>Update td Sync Log in story file with timestamp</action>
+      <output>✅ **No Drift Detected**
+      
+      Story file and td are synchronized.
+      Updated sync timestamp in story file.
+      </output>
+      <action>HALT - No sync needed</action>
+    </check>
+    
+    <output>📋 **Drift Report**
+
+{{#each drift_report}}
+**{{this.type}}**: {{this.message}}
+- Task: {{this.task_id}}
+- td Issue: {{this.td_issue_id}}
+- Story State: {{this.story_state}}
+- td State: {{this.td_state}}
+
+{{/each}}
+
+**Total Discrepancies:** {{drift_count}}
+    </output>
+    
+    <ask>How would you like to resolve the drift?
+
+1. **Sync td to Story** - Update td to match story file state
+2. **Sync Story to td** - Update story to match td state
+3. **Review each** - Decide individually for each discrepancy
+4. **Cancel** - Don't sync, just report
+
+Choose [1], [2], [3], or [4]:</ask>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 5: Apply Sync                           -->
+  <!-- ============================================ -->
+  
+  <step n="5" goal="Apply synchronization based on user choice">
+    <check if="user chose '1' (sync td to story)">
+      <action>For each drift item:</action>
+      <check if="type is 'story_ahead'">
+        <command>td close {td_issue_id} -m "Synced from story file"</command>
+      </check>
+      <check if="type is 'td_ahead'">
+        <command>td reopen {td_issue_id}</command>
+      </check>
+      <check if="type is 'status_mismatch' and story is done">
+        <command>td close {td_epic_id} -m "Story completed"</command>
+      </check>
+    </check>
+    
+    <check if="user chose '2' (sync story to td)">
+      <action>For each drift item:</action>
+      <check if="type is 'td_ahead'">
+        <action>Find task in story by td reference</action>
+        <action>Update checkbox to [x]</action>
+      </check>
+      <check if="type is 'story_ahead'">
+        <action>Find task in story</action>
+        <action>Update checkbox to [ ]</action>
+      </check>
+      <check if="type is 'status_mismatch' and td is closed">
+        <action>Update story Status to "done"</action>
+      </check>
+      <action>Save story file</action>
+    </check>
+    
+    <check if="user chose '3' (review each)">
+      <iterate over="drift_report">
+        <output>**Drift Item {{index}}/{{drift_count}}**
+        Type: {{item.type}}
+        Message: {{item.message}}
+        </output>
+        <ask>Resolve this?
+        [s] Sync td to story | [t] Sync story to td | [k] Keep both | [x] Skip</ask>
+        
+        <check if="user chooses 's'">
+          <action>Apply td-to-story sync for this item</action>
+        </check>
+        <check if="user chooses 't'">
+          <action>Apply story-to-td sync for this item</action>
+        </check>
+      </iterate>
+    </check>
+    
+    <check if="user chose '4' (cancel)">
+      <output>Sync cancelled. No changes made.</output>
+      <action>HALT</action>
+    </check>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 6: Update Sync Log                      -->
+  <!-- ============================================ -->
+  
+  <step n="6" goal="Update sync timestamp in story file">
+    <action>Set {{sync_timestamp}} = current timestamp</action>
+    
+    <action>Update td Integration section in story file:
+      - Last Sync: {{sync_timestamp}}
+      - Sync Status: "synced"
+    </action>
+    
+    <action>Add entry to td Sync Log table:
+      | {{sync_timestamp}} | sync | Resolved {{drift_count}} discrepancies |
+    </action>
+    
+    <action>Save story file</action>
+    
+    <output>✅ **Sync Complete**
+
+**Story File:** {{story_file}}
+**td Epic:** {{td_epic_id}}
+**Discrepancies Resolved:** {{resolved_count}}
+**Sync Timestamp:** {{sync_timestamp}}
+
+Story file and td are now synchronized.
+    </output>
+  </step>
+
+</workflow>

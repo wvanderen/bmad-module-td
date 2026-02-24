@@ -1,0 +1,55 @@
+code: td-integration
+name: "TD Integration"
+header: "BMAD + td CLI Integration"
+subheader: "Connect planning artifacts to task management"
+description: |
+  Integrates BMAD planning artifacts with td CLI task management for enhanced observability and the Ralph Wiggum loop.
+  
+  **Philosophy:** td is state, BMAD is structure
+  - BMAD `.md` files hold structured planning artifacts (epics, stories, architecture)
+  - td issues hold execution state (status, dependencies, reviews)
+  - sidecar provides observability
+  
+  **Key Features:**
+  - create-td-story: Creates story with td epic + task issues
+  - td-dev-next: Ralph Wiggum loop - one task per session
+  - td-review-story: Epic-level code review
+  - td-sync: Bidirectional sync story ↔ td
+  
+  **Requirements:**
+  - td CLI installed and initialized
+  - Git repository
+  - BMM module (planning artifacts)
+  
+default_selected: false
+
+# Module dependencies
+depends_on:
+  - bmm
+
+# Custom configuration questions
+td_cli_path:
+  prompt: "Where is your td CLI installed? (or 'td' if in PATH)"
+  default: "td"
+  result: "{value}"
+
+auto_sync:
+  prompt: "Enable auto-sync between story files and td?"
+  default: "enabled"
+  result: "{value}"
+  single-select:
+    - value: "enabled"
+      label: "Enabled - Auto-sync on story create and task complete"
+    - value: "disabled"
+      label: "Disabled - Manual sync only"
+
+session_prefix:
+  prompt: "Session name prefix for td sessions?"
+  default: "bmad-story"
+  result: "{value}"
+
+# Variables from Core Config inserted:
+## user_name
+## communication_language
+## document_output_language
+## output_folder

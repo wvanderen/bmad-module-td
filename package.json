@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@bmad-method/td-integration",
+  "version": "0.1.0",
+  "description": "BMAD expansion module for td CLI integration - td provides state, BMAD provides structure",
+  "keywords": [
+    "bmad",
+    "td",
+    "task-management",
+    "cli",
+    "integration"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bmad-code-org/bmad-module-td.git"
+  },
+  "license": "MIT",
+  "author": "BMad Method",
+  "main": "",
+  "bin": {},
+  "scripts": {
+    "format:check": "prettier --check \"**/*.{js,cjs,mjs,json,yaml}\"",
+    "format:fix": "prettier --write \"**/*.{js,cjs,mjs,json,yaml}\"",
+    "lint": "eslint . --ext .js,.cjs,.mjs,.yaml --max-warnings=0",
+    "lint:fix": "eslint . --ext .js,.cjs,.mjs,.yaml --fix",
+    "lint:md": "markdownlint-cli2 \"**/*.md\"",
+    "release": "npm run release:patch",
+    "release:major": "npm version major && git push --follow-tags",
+    "release:minor": "npm version minor && git push --follow-tags",
+    "release:patch": "npm version patch && git push --follow-tags",
+    "release:prerelease": "npm version prerelease && git push --follow-tags",
+    "test": "npm run lint && npm run format:check"
+  },
+  "devDependencies": {
+    "prettier": "^3.7.4",
+    "markdownlint-cli2": "^0.19.1"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bmad": {
+    "moduleType": "expansion",
+    "requires": [
+      "bmm"
+    ],
+    "provides": [
+      "td-integration"
+    ]
+  }
+}

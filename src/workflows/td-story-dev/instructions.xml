@@ -1,8 +1,8 @@
 <workflow>
   <critical>The workflow execution engine is governed by: {project-root}/_bmad/core/tasks/workflow.xml</critical>
-  <critical>You MUST have already loaded and processed: {installed_path}/workflow.yaml</critical>
+  <critical>You MUST have already loaded and processed this workflow's workflow.yaml</critical>
   <critical>Communicate all responses in {communication_language} tailored to {user_skill_level}</critical>
-  <critical>Load td operations: {td_ops}</critical>
+  <critical>Load td operations from: {td_ops}</critical>
 
   <critical>🎯 RALPH WIGGUM LOOP: ONE TASK PER SESSION - NO EXCEPTIONS! 🎯</critical>
   <critical>🔥 CRITICAL: Git commit with excellent message BEFORE td review submission! 🔥</critical>

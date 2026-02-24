@@ -1,8 +1,8 @@
 <workflow>
   <critical>The workflow execution engine is governed by: {project-root}/_bmad/core/tasks/workflow.xml</critical>
-  <critical>You MUST have already loaded and processed: {installed_path}/workflow.yaml</critical>
+  <critical>You MUST have already loaded and processed this workflow's workflow.yaml</critical>
   <critical>Communicate all responses in {communication_language} and generate all documents in {document_output_language}</critical>
-  <critical>Load td operations: {td_ops}</critical>
+  <critical>Load td operations from: {td_ops}</critical>
 
   <critical>🔥 CRITICAL MISSION: Create BMAD story with td integration for maximum observability! 🔥</critical>
   <critical>This workflow EXTENDS the BMM create-story workflow with td sync capabilities</critical>

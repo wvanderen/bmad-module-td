@@ -1,0 +1,27 @@
+name: td-story-review
+description: 'Execute epic-level code review after all story tasks are complete. Use when all tasks are approved and user says "review story" or "review epic"'
+
+# Critical variables from config (inherited from core)
+user_name: "{config:user_name}"
+communication_language: "{config:communication_language}"
+user_skill_level: "{config:user_skill_level}"
+document_output_language: "{config:document_output_language}"
+date: system-generated
+
+# Paths (relative for portability)
+implementation_artifacts: "{config:output_folder}/stories"
+
+# Workflow components (relative paths from src/)
+instructions: "instructions.xml"
+
+# Data files (relative paths from src/)
+status_mapping: "../data/td-status-mapping.yaml"
+td_ops: "../tools/td-ops.xml"
+
+# Story context
+story_file: ""
+td_epic_id: ""
+project_context: "**/project-context.md"
+
+# Session tracking
+session_type: "review"
