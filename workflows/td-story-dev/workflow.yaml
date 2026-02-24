@@ -11,13 +11,13 @@ date: system-generated
 # Paths (relative for portability)
 implementation_artifacts: "{config:output_folder}/stories"
 
-# Workflow components (relative paths from src/)
+# Workflow components (relative paths from module root)
 instructions: "instructions.xml"
 validation: "checklist.md"
 
-# Data files (relative paths from src/)
-status_mapping: "../data/td-status-mapping.yaml"
-td_ops: "../tools/td-ops.xml"
+# Data files (relative paths from module root)
+status_mapping: "data/td-status-mapping.yaml"
+td_ops: "tools/td-ops.xml"
 
 # Story and task context
 story_file: ""

@@ -39,7 +39,12 @@
     "node": ">=22.0.0"
   },
   "files": [
-    "src"
+    "data",
+    "templates",
+    "tools",
+    "workflows",
+    "module-help.csv",
+    "module.yaml"
   ],
   "publishConfig": {
     "access": "public"

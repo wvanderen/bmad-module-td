@@ -1,0 +1,12 @@
+AGENTS.md
+.git
+.gitignore
+node_modules
+.todos
+.opencode
+.claude
+.bmad
+_bmad-output
+_docs
+*.md
+!src/**/*.md
