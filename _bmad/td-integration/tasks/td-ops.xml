@@ -1,0 +1,430 @@
+<task id="td-integration/tasks/td-ops.xml" name="td CLI Operations" internal="true">
+  <objective>Provide reusable td CLI operations for BMAD-td integration workflows</objective>
+
+  <llm critical="true">
+    <mandate>Always run `td usage --new-session` at the START of any td-integration workflow</mandate>
+    <mandate>Use `td ws` commands when implementing multiple related issues</mandate>
+    <mandate>Always create handoff before review: `td handoff`</mandate>
+    <mandate>Reviews must be done in a DIFFERENT session than implementation</mandate>
+  </llm>
+
+  <!-- ============================================ -->
+  <!-- EPIC OPERATIONS                              -->
+  <!-- ============================================ -->
+  
+  <operation id="create-td-epic" name="Create td Epic for Story">
+    <description>Creates a td epic to represent a BMAD story</description>
+    
+    <inputs>
+      <input name="story_key" required="true">Story identifier (e.g., "1-2-user-auth")</input>
+      <input name="story_title" required="true">Story title for epic title</input>
+      <input name="story_file_path" required="true">Path to the BMAD story file</input>
+      <input name="epic_num" required="true">BMAD epic number</input>
+      <input name="acceptance_criteria" required="false">AC summary for epic body</input>
+      <input name="user_story" required="false">User story statement</input>
+    </inputs>
+    
+    <outputs>
+      <output name="td_epic_id">The created td epic ID (e.g., td-abc123)</output>
+    </outputs>
+    
+    <execution>
+      <action>Construct epic title: "Story {epic_num}.{story_num}: {story_title}"</action>
+      <action>Construct epic body using td-field-schema.yaml template</action>
+      <action>Build tags: "bmad,epic,epic-{epic_num}"</action>
+      
+      <command>
+        td add "{epic_title}" --type epic --tag bmad --tag epic --tag "epic-{epic_num}" \
+          --body "{epic_body}" \
+          --metadata story_file="{story_file_path}" \
+          --metadata epic_num="{epic_num}"
+      </command>
+      
+      <action>Parse response to extract td_epic_id</action>
+      <action>Store td_epic_id for subsequent operations</action>
+    </execution>
+    
+    <example>
+      <input>
+        story_key: "1-2-user-auth"
+        story_title: "User Authentication"
+        story_file_path: "_bmad-output/stories/1-2-user-auth.md"
+        epic_num: "1"
+      </input>
+      <command>
+        td add "Story 1.2: User Authentication" --type epic --tag bmad --tag epic --tag epic-1 \
+          --body "..." --metadata story_file="_bmad-output/stories/1-2-user-auth.md"
+      </command>
+      <output>td_epic_id: td-abc123</output>
+    </example>
+  </operation>
+
+  <!-- ============================================ -->
+  <!-- ISSUE OPERATIONS                             -->
+  <!-- ============================================ -->
+  
+  <operation id="create-td-issue" name="Create td Issue for Task">
+    <description>Creates a td issue as child of an epic, representing a story task</description>
+    
+    <inputs>
+      <input name="task_description" required="true">Task description from story</input>
+      <input name="parent_epic_id" required="true">Parent td epic ID</input>
+      <input name="story_file_path" required="true">Path to the BMAD story file</input>
+      <input name="task_index" required="false">Task index in story</input>
+      <input name="ac_reference" required="false">Related acceptance criterion</input>
+      <input name="depends_on" required="false">List of td issue IDs this depends on</input>
+    </inputs>
+    
+    <outputs>
+      <output name="td_issue_id">The created td issue ID</output>
+    </outputs>
+    
+    <execution>
+      <action>Construct issue body with task context</action>
+      <action>Build tags: "bmad,task"</action>
+      
+      <command>
+        td add "{task_description}" --parent {parent_epic_id} --tag bmad --tag task \
+          --body "{issue_body}" \
+          --metadata story_file="{story_file_path}" \
+          --metadata task_index="{task_index}"
+      </command>
+      
+      <check if="depends_on is provided">
+        <action>Add --depends-on flag with comma-separated issue IDs</action>
+      </check>
+      
+      <action>Parse response to extract td_issue_id</action>
+    </execution>
+  </operation>
+
+  <operation id="create-td-issues-batch" name="Create td Issues for All Story Tasks">
+    <description>Creates td issues for all tasks in a story, handling dependencies</description>
+    
+    <inputs>
+      <input name="tasks_list" required="true">List of tasks with descriptions and dependencies</input>
+      <input name="parent_epic_id" required="true">Parent td epic ID</input>
+      <input name="story_file_path" required="true">Path to the BMAD story file</input>
+    </inputs>
+    
+    <outputs>
+      <output name="task_mapping">Map of task indices to td issue IDs</output>
+    </outputs>
+    
+    <execution>
+      <action>Initialize empty task_mapping dictionary</action>
+      <action>Initialize empty dependency_registry dictionary</action>
+      
+      <iterate over="tasks_list" index="i">
+        <action>Parse task description for dependency hints: "(depends: task-N)"</action>
+        
+        <check if="dependencies found">
+          <action>Resolve dependency task numbers to td_issue_ids from dependency_registry</action>
+          <action>Set depends_on = resolved issue IDs</action>
+        </check>
+        
+        <invoke operation="create-td-issue">
+          <param name="task_description">tasks_list[i].description</param>
+          <param name="parent_epic_id">parent_epic_id</param>
+          <param name="story_file_path">story_file_path</param>
+          <param name="task_index">i</param>
+          <param name="depends_on">depends_on</param>
+        </invoke>
+        
+        <action>Add entry to task_mapping: task_index → td_issue_id</action>
+        <action>Add entry to dependency_registry: task_index → td_issue_id</action>
+      </iterate>
+      
+      <output>task_mapping</output>
+    </execution>
+  </operation>
+
+  <!-- ============================================ -->
+  <!-- SESSION OPERATIONS                           -->
+  <!-- ============================================ -->
+  
+  <operation id="start-td-session" name="Start td Session for Story Work">
+    <description>Initializes a td session for working on story tasks</description>
+    
+    <inputs>
+      <input name="story_key" required="true">Story identifier for session naming</input>
+      <input name="session_type" required="false">Type: "dev" or "review" (default: "dev")</input>
+    </inputs>
+    
+    <execution>
+      <command>td usage --new-session</command>
+      
+      <check if="session_type == 'dev'">
+        <command>td session "story-{story_key}-dev"</command>
+      </check>
+      
+      <check if="session_type == 'review'">
+        <command>td session "story-{story_key}-review"</command>
+      </check>
+    </execution>
+  </operation>
+
+  <operation id="start-td-workspace" name="Start td Work Session">
+    <description>Creates a td workspace for tracking multiple related issues</description>
+    
+    <inputs>
+      <input name="workspace_name" required="true">Name for the work session</input>
+    </inputs>
+    
+    <execution>
+      <command>td ws start "{workspace_name}"</command>
+      <action>Store workspace ID for subsequent ws operations</action>
+    </execution>
+  </operation>
+
+  <!-- ============================================ -->
+  <!-- STATUS OPERATIONS                            -->
+  <!-- ============================================ -->
+  
+  <operation id="get-next-task" name="Get Next Ready Task">
+    <description>Gets the highest priority ready task for a story</description>
+    
+    <inputs>
+      <input name="epic_id" required="true">td epic ID for the story</input>
+    </inputs>
+    
+    <outputs>
+      <output name="next_task_id">td issue ID of next ready task</output>
+      <output name="next_task_title">Task title/description</output>
+    </outputs>
+    
+    <execution>
+      <command>td list --parent {epic_id} --status open --json</command>
+      
+      <action>Parse response to find first open issue</action>
+      <action>If multiple open issues, check dependencies</action>
+      <action>Return first issue with no unmet dependencies</action>
+    </execution>
+  </operation>
+
+  <operation id="start-task" name="Start Working on td Issue">
+    <description>Marks a td issue as in_progress</description>
+    
+    <inputs>
+      <input name="issue_id" required="true">td issue ID to start</input>
+    </inputs>
+    
+    <execution>
+      <command>td start {issue_id}</command>
+      <command>td focus {issue_id}</command>
+    </execution>
+  </operation>
+
+  <operation id="complete-task" name="Complete td Issue">
+    <description>Creates handoff and submits td issue for review</description>
+    
+    <inputs>
+      <input name="issue_id" required="true">td issue ID</input>
+      <input name="done_items" required="false">List of completed items</input>
+      <input name="decisions" required="false">List of decisions made</input>
+      <input name="notes" required="false">Completion notes</input>
+    </inputs>
+    
+    <execution>
+      <!-- Build handoff command -->
+      <action>Initialize handoff_args = []</action>
+      
+      <iterate over="done_items">
+        <action>handoff_args += "--done '{item}'"</action>
+      </iterate>
+      
+      <iterate over="decisions">
+        <action>handoff_args += "--decision '{decision}'"</action>
+      </iterate>
+      
+      <check if="notes provided">
+        <action>handoff_args += "-m '{notes}'"</action>
+      </check>
+      
+      <command>td handoff {issue_id} {handoff_args}</command>
+      <command>td review {issue_id}</command>
+    </execution>
+  </operation>
+
+  <!-- ============================================ -->
+  <!-- SYNC OPERATIONS                              -->
+  <!-- ============================================ -->
+  
+  <operation id="sync-story-to-td" name="Sync Story Status to td">
+    <description>Updates td epic and issues to match story file state</description>
+    
+    <inputs>
+      <input name="story_file_path" required="true">Path to story file</input>
+      <input name="epic_id" required="true">td epic ID</input>
+    </inputs>
+    
+    <execution>
+      <action>Load story file and parse td Integration section</action>
+      <action>Get current td state: td show {epic_id}</action>
+      <action>Compare story status with td epic status</action>
+      
+      <check if="story status is 'done' and td status is not 'closed'">
+        <command>td close {epic_id} -m "Story completed"</command>
+      </check>
+      
+      <action>For each task in task_mapping, sync checkbox state to td issue status</action>
+    </execution>
+  </operation>
+
+  <operation id="sync-td-to-story" name="Sync td Status to Story">
+    <description>Updates story file to match td state</description>
+    
+    <inputs>
+      <input name="story_file_path" required="true">Path to story file</input>
+      <input name="epic_id" required="true">td epic ID</input>
+    </inputs>
+    
+    <execution>
+      <command>td list --parent {epic_id} --json</command>
+      
+      <action>Parse response to get all child issues with statuses</action>
+      <action>Load story file</action>
+      
+      <iterate over="td_issues">
+        <action>Find matching task in story by td reference</action>
+        <action>Map td status to checkbox state using status-mapping</action>
+        <action>Update task checkbox in story file</action>
+      </iterate>
+      
+      <action>Update Last Sync timestamp in td Integration section</action>
+      <action>Save story file</action>
+    </execution>
+  </operation>
+
+  <operation id="detect-drift" name="Detect Sync Drift">
+    <description>Compares story file state with td state to detect discrepancies</description>
+    
+    <inputs>
+      <input name="story_file_path" required="true">Path to story file</input>
+      <input name="epic_id" required="true">td epic ID</input>
+    </inputs>
+    
+    <outputs>
+      <output name="drift_report">List of discrepancies found</output>
+    </outputs>
+    
+    <execution>
+      <action>Load story file and parse task states</action>
+      <command>td list --parent {epic_id} --json</command>
+      <action>Parse td issue states</action>
+      
+      <action>For each task with td reference:</action>
+      <check if="story task is [x] but td issue is not closed">
+        <action>Add to drift_report: "Story ahead: task {task_id}"</action>
+      </check>
+      <check if="story task is [ ] but td issue is closed">
+        <action>Add to drift_report: "td ahead: issue {issue_id}"</action>
+      </check>
+      
+      <output>drift_report</output>
+    </execution>
+  </operation>
+
+  <!-- ============================================ -->
+  <!-- REVIEW OPERATIONS                            -->
+  <!-- ============================================ -->
+  
+  <operation id="approve-epic" name="Approve td Epic (Complete Story)">
+    <description>Closes td epic after successful story review</description>
+    
+    <inputs>
+      <input name="epic_id" required="true">td epic ID</input>
+      <input name="review_notes" required="false">Review approval notes</input>
+    </inputs>
+    
+    <execution>
+      <critical>MUST be called from a different session than implementation</critical>
+      
+      <command>td usage --new-session</command>
+      <command>td session "review-epic-{epic_id}"</command>
+      <command>td approve {epic_id} -m "{review_notes}"</command>
+    </execution>
+  </operation>
+
+  <operation id="create-review-issues" name="Create td Issues for Review Findings">
+    <description>Creates td issues for code review findings that need fixes</description>
+    
+    <inputs>
+      <input name="epic_id" required="true">Parent td epic ID</input>
+      <input name="findings" required="true">List of review findings</input>
+      <input name="story_file_path" required="true">Path to story file</input>
+    </inputs>
+    
+    <outputs>
+      <output name="review_issue_ids">List of created issue IDs</output>
+    </outputs>
+    
+    <execution>
+      <action>Initialize review_issue_ids = []</action>
+      
+      <iterate over="findings">
+        <action>Construct issue title: "[{severity}] {finding_description}"</action>
+        <action>Construct issue body with file:line references</action>
+        
+        <command>
+          td add "{issue_title}" --parent {epic_id} --tag bmad --tag review-followup \
+            --tag "severity-{severity}" \
+            --body "{issue_body}" \
+            --metadata story_file="{story_file_path}"
+        </command>
+        
+        <action>Add issue_id to review_issue_ids</action>
+      </iterate>
+      
+      <output>review_issue_ids</output>
+    </execution>
+  </operation>
+
+  <!-- ============================================ -->
+  <!-- QUERY OPERATIONS                             -->
+  <!-- ============================================ -->
+  
+  <operation id="get-epic-status" name="Get td Epic Status Summary">
+    <description>Gets status summary of all tasks in an epic</description>
+    
+    <inputs>
+      <input name="epic_id" required="true">td epic ID</input>
+    </inputs>
+    
+    <outputs>
+      <output name="status_summary">Dict with counts by status</output>
+    </outputs>
+    
+    <execution>
+      <command>td list --parent {epic_id} --json</command>
+      
+      <action>Parse response and count by status:
+        - open_count
+        - in_progress_count  
+        - review_count
+        - blocked_count
+        - closed_count
+      </action>
+      
+      <output>status_summary</output>
+    </execution>
+  </operation>
+
+  <operation id="get-blocking-issues" name="Get Blocking Issues">
+    <description>Gets list of issues blocking progress on a story</description>
+    
+    <inputs>
+      <input name="epic_id" required="true">td epic ID</input>
+    </inputs>
+    
+    <outputs>
+      <output name="blocking_issues">List of blocked td issues</output>
+    </outputs>
+    
+    <execution>
+      <command>td list --parent {epic_id} --status blocked --json</command>
+      <output>blocking_issues</output>
+    </execution>
+  </operation>
+
+</task>
