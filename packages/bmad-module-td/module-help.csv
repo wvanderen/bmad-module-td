@@ -1,0 +1,4 @@
+module,phase,name,code,sequence,workflow-file,command,required,agent,options,description,output-location,outputs,
+td-integration,anytime,Initialize,INI,10,workflows/initialize/workflow.yaml,/bmad:td:initialize,false,sm,Create Mode,"Accept-default onboarding for greenfield or brownfield projects; sets up BMAD and td dependency mapping so next-step can run",planning_artifacts|implementation_artifacts,workspace,
+td-integration,anytime,Setup Validation,SVA,20,workflows/setup-validation/workflow.yaml,/bmad:td:setup-validation,false,sm,Create Mode,"Define project validation methodology and quality gates used by reviews and implementation verification",planning_artifacts,validation,
+td-integration,anytime,Next Step,NXT,30,workflows/next-step/workflow.yaml,/bmad:td:next-step,false,dev,Create Mode,"Analyze td and BMAD workspace state, choose the highest-priority action, and execute it",,,

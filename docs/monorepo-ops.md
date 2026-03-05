@@ -2,12 +2,12 @@
 
 ## Package Boundaries
 
-- `@wvanderen/bmad-module-td` (root package): BMAD td-integration module content.
+- `@wvanderen/bmad-module-td` (`packages/bmad-module-td`): BMAD td-integration module content.
 - `@wvanderen/pi-bmad-autopilot` (`packages/pi-bmad-autopilot`): Pi extension workspace package.
 
 ## Source of Truth
 
-- Author module files in root paths: `workflows/`, `tools/`, `templates/`, `data/`, `module.yaml`, `module-help.csv`, `README.md`, `AGENTS.md`.
+- Author module files in `packages/bmad-module-td`.
 - Treat `_bmad/td-integration/` as a generated installable mirror.
 
 ## Sync Rules
@@ -20,5 +20,5 @@
 
 1. Update module source.
 2. Run `npm run sync:module`.
-3. Reinstall module into sandbox with `npx bmad-method install --custom-content <path> --action update --yes`.
+3. Reinstall module into sandbox with `npx bmad-method install --custom-content <repo>/packages/bmad-module-td --action update --yes`.
 4. Reload Pi extension and run bounded autopilot test.

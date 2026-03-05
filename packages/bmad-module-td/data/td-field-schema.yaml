@@ -1,0 +1,173 @@
+# TD Field Schema
+# Defines how BMAD story fields map to td issue fields
+# Version: 1.0.0
+
+# Story → td Epic mapping
+story_to_td_epic:
+  # Identity fields
+  story_key:
+    td_field: "title"
+    format: "Story {epic_num}.{story_num}: {story_title}"
+    example: "Story 1.2: User Authentication"
+    
+  story_title:
+    td_field: "title"
+    format: "Story {epic_num}.{story_num}: {story_title}"
+    
+  # Content fields
+  user_story:
+    td_field: "body"
+    format: |
+      ## User Story
+      {user_story_content}
+      
+  acceptance_criteria:
+    td_field: "body"
+    format: |
+      ## Acceptance Criteria
+      {acceptance_criteria_list}
+      
+  dev_notes:
+    td_field: "body"
+    format: |
+      ## Dev Notes
+      {dev_notes_summary}
+      
+  # Metadata fields
+  story_file_path:
+    td_field: "metadata.story_file"
+    description: "Path to the BMAD story markdown file"
+    
+  epic_num:
+    td_field: "labels"
+    format: "epic-{epic_num}"
+    
+  # Status
+  status:
+    td_field: "status"
+    mapping: "status_mapping.bmad_to_td"
+
+# Task → td Issue mapping (child of epic)
+task_to_td_issue:
+  # Identity fields
+  task_id:
+    td_field: "title"
+    format: "{task_description}"
+    example: "Set up authentication middleware"
+    
+  task_description:
+    td_field: "title"
+    
+  # Content fields  
+  task_ac_reference:
+    td_field: "body"
+    format: "**Related AC:** {ac_number}"
+    
+  task_dev_notes:
+    td_field: "body"
+    format: |
+      ## Context
+      {dev_notes_excerpt}
+      
+  # Relationships
+  parent_epic:
+    td_field: "parent"
+    description: "td epic ID for the parent story"
+    
+  task_dependencies:
+    td_field: "depends_on"
+    format: "td_issue_id"
+    description: "Parse '(depends: task-N)' from task description"
+    
+  # Metadata
+  story_file_path:
+    td_field: "metadata.story_file"
+    
+  task_index:
+    td_field: "metadata.task_index"
+    
+  # Status
+  task_status:
+    td_field: "status"
+    mapping: "status_mapping.task_status"
+
+# td → Story mapping (reverse sync)
+td_to_story:
+  # Epic → Story updates
+  epic_id:
+    story_field: "td_integration.td_epic_id"
+    location: "## td Integration section"
+    
+  epic_status:
+    story_field: "status"
+    mapping: "status_mapping.td_to_bmad"
+    
+  # Issue → Task updates
+  issue_id:
+    story_field: "td_integration.task_mapping"
+    format: "| {task_id} | {td_issue_id} | {status} |"
+    
+  issue_status:
+    story_field: "tasks.{task_id}.checkbox"
+    mapping: "status_mapping.td_to_bmad.task_checkbox"
+
+# Metadata schema for td issues
+td_metadata_schema:
+  story_file:
+    type: "string"
+    description: "Absolute or relative path to the BMAD story file"
+    required: true
+    
+  task_index:
+    type: "integer"
+    description: "Index of the task in the story's task list"
+    required: false
+    
+  epic_num:
+    type: "integer"
+    description: "BMAD epic number"
+    required: true
+    
+  story_num:
+    type: "integer"
+    description: "BMAD story number within epic"
+    required: true
+    
+  sync_timestamp:
+    type: "datetime"
+    description: "Last sync timestamp"
+    required: false
+
+# Body template for td epic (full story context)
+td_epic_body_template: |
+  ## Story
+  {user_story}
+  
+  ## Acceptance Criteria
+  {acceptance_criteria}
+  
+  ## Dev Notes Summary
+  {dev_notes_summary}
+  
+  ---
+  
+  📁 **Story File:** `{story_file_path}`
+  
+  _This epic is managed by BMAD td-integration module._
+
+# Body template for td issue (task context)
+td_issue_body_template: |
+  **Story:** {story_key}
+  **AC Reference:** {ac_reference}
+  
+  ## Task Description
+  {task_description}
+  
+  ## Context from Dev Notes
+  {dev_notes_excerpt}
+  
+  ---
+  
+  📁 **Story File:** `{story_file_path}`
+  
+  _This task is part of story {story_key}._

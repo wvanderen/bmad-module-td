@@ -1,0 +1,67 @@
+<workflow>
+  <critical>The workflow execution engine is governed by: {project-root}/_bmad/core/tasks/workflow.xml</critical>
+  <critical>You MUST have already loaded and processed this workflow's workflow.yaml</critical>
+  <critical>Communicate all responses in {communication_language} tailored to {user_skill_level}</critical>
+  <critical>Execute the unified next-step workflow directly from these instructions. Do not rely on an external skill file.</critical>
+  <critical>Ask questions when unclear - do not guess.</critical>
+  <critical>Validation methodology is a mandatory review gate. Reviews and implementations must use {validation_methodology_file} when available.</critical>
+
+  <step n="1" goal="Analyze workspace state">
+    <action>Run `td usage --new-session` if this is a fresh context; otherwise run `td usage -q`</action>
+    <action>Run `td reviewable` and capture all issues awaiting review</action>
+    <action>Run `td ready` and capture all issues ready for implementation</action>
+    <action>Run `td status` to capture global queue health and blockers</action>
+    <action>Inspect BMAD planning artifacts to identify empty epics and epics with all tasks complete</action>
+    <action>Load project context from {project_context} if present</action>
+    <action>Load validation methodology from {validation_methodology_file} if present</action>
+    <check if="{validation_methodology_file} is missing">
+      <action>Mark review confidence as reduced and enforce fallback verification: run tests, lint, typecheck, build, and smoke checks where available</action>
+      <action>Add recommendation to run `/bmad:td:setup-validation` before future reviews</action>
+    </check>
+  </step>
+
+  <step n="2" goal="Determine next action using strict priority">
+    <action>Apply priority in this exact order:</action>
+    <action>1) Reviews (highest): if any reviewable issues exist, choose the highest-priority reviewable item</action>
+    <action>2) Implement ready issues: if no reviews exist and ready items exist, choose the highest-priority ready item</action>
+    <action>3) Epic workflows: if no reviewable or ready items exist, run epic maintenance</action>
+    <action>For epic maintenance: if an epic has no child tasks, run BMAD create-story flow; if an epic has all tasks approved/closed, run BMAD code-review flow</action>
+    <check if="multiple candidates have equal priority and no deterministic tie-break exists">
+      <ask>Ask one targeted question with a recommended default tie-break, and explain outcome impact</ask>
+    </check>
+  </step>
+
+  <step n="3" goal="Execute chosen action">
+    <check if="selected action is review">
+      <critical>Review must run in a different session than implementation per td separation rules.</critical>
+      <action>Load issue context, linked story context, and recent code changes</action>
+      <action>Apply validation methodology gates from {validation_methodology_file}</action>
+      <action>When methodology defines commands, execute them and capture pass/fail evidence</action>
+      <action>When methodology is missing, run fallback verification suite and clearly state reduced confidence</action>
+      <action>Produce review decision with concrete findings and required follow-ups</action>
+      <action>Submit review using td review workflow commands</action>
+    </check>
+
+    <check if="selected action is implementation">
+      <action>Start issue with `td start {id}` and set focus</action>
+      <action>Implement only the selected issue scope</action>
+      <action>Run required validation methodology checks (or fallback checks if methodology absent)</action>
+      <action>Do not move to review until verification evidence is recorded</action>
+      <action>Create td handoff including implementation details and validation evidence</action>
+      <action>Submit issue for review</action>
+    </check>
+
+    <check if="selected action is epic workflow">
+      <action>For empty epics, execute BMAD create-story and synchronize td mapping/dependencies</action>
+      <action>For completed epics, execute BMAD code-review and record outcome in td</action>
+    </check>
+  </step>
+
+  <step n="4" goal="Commit when applicable and report next action">
+    <check if="code or docs changed as part of execution">
+      <action>Create git commit using the module commit-message format and include td references</action>
+    </check>
+    <action>Report what action was executed, which priority branch it came from, and what is next</action>
+    <action>If validation methodology was absent or weak, recommend `/bmad:td:setup-validation`</action>
+  </step>
+</workflow>

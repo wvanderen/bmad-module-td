@@ -5,23 +5,48 @@ import path from "node:path";
 const root = process.cwd();
 const checkOnly = process.argv.includes("--check");
 
+const sourceArgIndex = process.argv.indexOf("--source-dir");
+const sourceDir =
+  sourceArgIndex >= 0 && process.argv[sourceArgIndex + 1]
+    ? process.argv[sourceArgIndex + 1]
+    : ".";
+
+const sourcePath = (target) =>
+  sourceDir === "." ? target : path.join(sourceDir, target);
+
 const syncPairs = [
-  { src: "data", dest: "_bmad/td-integration/data", type: "dir" },
-  { src: "templates", dest: "_bmad/td-integration/templates", type: "dir" },
-  { src: "tools", dest: "_bmad/td-integration/tools", type: "dir" },
-  { src: "workflows", dest: "_bmad/td-integration/workflows", type: "dir" },
+  { src: sourcePath("data"), dest: "_bmad/td-integration/data", type: "dir" },
   {
-    src: "module.yaml",
+    src: sourcePath("templates"),
+    dest: "_bmad/td-integration/templates",
+    type: "dir",
+  },
+  { src: sourcePath("tools"), dest: "_bmad/td-integration/tools", type: "dir" },
+  {
+    src: sourcePath("workflows"),
+    dest: "_bmad/td-integration/workflows",
+    type: "dir",
+  },
+  {
+    src: sourcePath("module.yaml"),
     dest: "_bmad/td-integration/module.yaml",
     type: "file",
   },
   {
-    src: "module-help.csv",
+    src: sourcePath("module-help.csv"),
     dest: "_bmad/td-integration/module-help.csv",
     type: "file",
   },
-  { src: "README.md", dest: "_bmad/td-integration/README.md", type: "file" },
-  { src: "AGENTS.md", dest: "_bmad/td-integration/AGENTS.md", type: "file" },
+  {
+    src: sourcePath("README.md"),
+    dest: "_bmad/td-integration/README.md",
+    type: "file",
+  },
+  {
+    src: sourcePath("AGENTS.md"),
+    dest: "_bmad/td-integration/AGENTS.md",
+    type: "file",
+  },
 ];
 
 const hashBuffer = (buffer) =>

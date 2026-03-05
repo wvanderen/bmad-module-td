@@ -1,9 +1,6 @@
-# BMAD TD Monorepo
+# @wvanderen/bmad-module-td
 
-Monorepo for:
-
-- `packages/bmad-module-td` - BMAD td-integration module
-- `packages/pi-bmad-autopilot` - Pi extension for autonomous BMAD execution
+A BMAD Method module for integrating with td CLI task management.
 
 ## Overview
 
@@ -18,11 +15,11 @@ This module connects BMAD planning artifacts with td CLI using a focused command
 ## Installation
 
 ```bash
-# Install from npm (module package)
+# Install the module
 npm install @wvanderen/bmad-module-td
 
-# Or install from local monorepo package path
-npx bmad-method install --custom-content /path/to/repo/packages/bmad-module-td --action update --yes
+# Register with BMAD (run from your project root)
+npx bmad-method install --custom-content ./node_modules/@wvanderen/bmad-module-td --action update --yes
 ```
 
 **Note:** The `--custom-content` flag is required because this is a community module not yet in the official BMAD registry.
@@ -80,9 +77,9 @@ Refs: {td_issue_id}
 
 ### Workspace Layout
 
-- `packages/bmad-module-td`: BMAD td module source (publishable)
+- `.`: BMAD td module package source (publishable)
 - `packages/pi-bmad-autopilot`: Pi autopilot workspace package
-- `examples/pi-extension`: local extension fixture for Pi
+- `examples/pi-extension`: extension file used for local Pi installation
 
 Operational details: `docs/monorepo-ops.md`
 

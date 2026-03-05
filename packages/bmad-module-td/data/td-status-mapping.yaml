@@ -1,0 +1,71 @@
+# TD Status Mapping
+# Maps between BMAD story statuses and td issue statuses
+# Version: 1.0.0
+
+# BMAD story status → td issue status mapping
+bmad_to_td:
+  # Story states
+  backlog:
+    td_status: "open"
+    description: "Story exists but not yet started"
+    
+  ready-for-dev:
+    td_status: "open"
+    td_label: "ready"
+    description: "Story has full context, ready for implementation"
+    
+  in-progress:
+    td_status: "in_progress"
+    description: "Currently being implemented"
+    
+  review:
+    td_status: "review"
+    description: "Implementation complete, awaiting review"
+    
+  done:
+    td_status: "closed"
+    description: "Completed and approved"
+    
+  blocked:
+    td_status: "blocked"
+    description: "Cannot proceed due to external dependency"
+
+# td issue status → BMAD story status mapping (reverse)
+td_to_bmad:
+  open:
+    bmad_status: "ready-for-dev"
+    task_checkbox: "[ ]"
+    
+  in_progress:
+    bmad_status: "in-progress"
+    task_checkbox: "[ ]"  # Keep unchecked while working
+    
+  review:
+    bmad_status: "review"
+    task_checkbox: "[ ]"  # Keep unchecked until approved
+    
+  blocked:
+    bmad_status: "blocked"
+    task_checkbox: "[ ]"
+    
+  closed:
+    bmad_status: "done"
+    task_checkbox: "[x]"
+
+# Task-level status mapping (for individual tasks within a story)
+task_status:
+  unchecked: "[ ]"
+  checked: "[x]"
+  
+  # td statuses for tasks
+  open: "[ ]"
+  in_progress: "[ ]"  # Task being worked on
+  review: "[ ]"       # Task in review
+  closed: "[x]"       # Task complete
+
+# Epic status mapping (for td epics representing BMAD stories)
+epic_status:
+  bmad_story_ready: "open"
+  bmad_story_in_progress: "in_progress"
+  bmad_story_review: "review"
+  bmad_story_done: "closed"

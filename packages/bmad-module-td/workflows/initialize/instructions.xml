@@ -1,0 +1,73 @@
+<workflow>
+  <critical>The workflow execution engine is governed by: {project-root}/_bmad/core/tasks/workflow.xml</critical>
+  <critical>You MUST have already loaded and processed this workflow's workflow.yaml</critical>
+  <critical>Communicate all responses in {communication_language} tailored to {user_skill_level}</critical>
+  <critical>Default to an accept-default experience that gets the workspace ready for next-step with minimal user friction.</critical>
+  <critical>If td has no open issues, that is NOT completion for initialize. You must bootstrap BMAD planning and td tasks before finishing.</critical>
+
+  <step n="1" goal="Initialize td session and inspect workspace state">
+    <action>Run `td usage --new-session` to initialize td context</action>
+    <action>Inspect whether BMAD planning artifacts exist (PRD, architecture, epics, stories)</action>
+    <action>Inspect td state (existing issues, parent-child links, dependency links, reviewable/ready counts)</action>
+    <action>Classify project mode as greenfield or brownfield automatically unless user explicitly overrides</action>
+    <action>Build a readiness snapshot with booleans: has_prd, has_product_brief, has_architecture, has_epics_or_stories, has_td_epic, has_td_tasks</action>
+    <action>Treat "no open issues" or `td next` empty output as a setup signal, not a stop signal</action>
+  </step>
+
+  <step n="2" goal="Run the appropriate onboarding branch">
+    <check if="project is brownfield">
+      <action>Onboard existing project into BMAD by creating or updating recommended artifacts needed for execution flow</action>
+      <check if="has_prd or has_product_brief, but has_architecture is false">
+        <action>Execute `_bmad/bmm/workflows/3-solutioning/create-architecture/workflow.md` directly via `_bmad/core/tasks/workflow.xml` using defaults (do not rely on slash command availability)</action>
+      </check>
+      <check if="has_epics_or_stories is false">
+        <action>Execute `_bmad/bmm/workflows/3-solutioning/create-epics-and-stories/workflow.md` directly via `_bmad/core/tasks/workflow.xml` using defaults (do not rely on slash command availability)</action>
+      </check>
+      <action>Map BMAD stories/tasks to td issues with explicit dependency links</action>
+      <action>Backfill missing dependency metadata for existing td issues where possible</action>
+      <action>Prefer deterministic defaults and avoid unnecessary prompts</action>
+    </check>
+
+    <check if="project is greenfield">
+      <action>Run BMAD initialization workflow and create foundational planning artifacts</action>
+      <action>Select recommended BMAD workflows based on project scope and complexity defaults</action>
+      <action>Ensure planning outputs include architecture plus epics/stories by executing workflow files directly (`_bmad/bmm/workflows/3-solutioning/create-architecture/workflow.md` and `_bmad/bmm/workflows/3-solutioning/create-epics-and-stories/workflow.md`) when missing</action>
+      <action>Create td epics/tasks from the selected workflow outputs with dependency links mapped</action>
+      <action>Prefer deterministic defaults and avoid unnecessary prompts</action>
+    </check>
+
+    <check if="has_td_epic is false or has_td_tasks is false after onboarding">
+      <action>Create td epics and child tasks from BMAD stories now; do not exit initialize without actionable td structure</action>
+    </check>
+  </step>
+
+  <step n="3" goal="Validate next-step readiness">
+    <action>Re-check td state after onboarding and confirm at least one of: reviewable issues, ready issues, or a defined epic-level next action</action>
+    <action>Verify td graph has actionable structure (reviewable, ready, or epic-level next action)</action>
+    <action>Verify BMAD artifacts and td metadata are synchronized enough for autonomous execution</action>
+    <action>If critical setup gaps remain, fix them in-place using defaults</action>
+    <check if="td still has no epic and no tasks">
+      <action>Run BMAD planning bootstrap by executing workflow files directly (`create-architecture` then `create-epics-and-stories`) and regenerate td mapping</action>
+      <action>Repeat readiness validation before finishing</action>
+    </check>
+    <check if="{validation_methodology_file} does not exist">
+      <check if="{architecture_file} exists">
+        <action>Execute `_bmad/td-integration/workflows/setup-validation/workflow.yaml` directly via `_bmad/core/tasks/workflow.xml` using defaults</action>
+      </check>
+      <check if="{architecture_file} does not exist">
+        <action>Create a td task: "Set up validation methodology" and tag as bmad</action>
+        <action>Set dependency so review-heavy work references this setup task before final approvals when possible</action>
+        <action>Record recommendation to run `/bmad:td:setup-validation` after architecture is drafted</action>
+      </check>
+    </check>
+    <check if="a critical ambiguity blocks safe setup">
+      <ask>Ask one targeted question only, include recommended default, and explain what changes with each choice</ask>
+    </check>
+  </step>
+
+  <step n="4" goal="Finish with clear handoff to next-step">
+    <output>Initialization complete. Workspace is prepared for `/bmad:td:next-step`.</output>
+    <action>Report project mode detected, artifacts created/updated, td dependency mapping status, validation methodology status, and first recommended next-step action</action>
+    <action>Include explicit evidence in the report: created/verified BMAD workflows and resulting td epic/task counts</action>
+  </step>
+</workflow>

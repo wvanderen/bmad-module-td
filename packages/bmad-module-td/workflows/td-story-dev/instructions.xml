@@ -1,0 +1,324 @@
+<workflow>
+  <critical>The workflow execution engine is governed by: {project-root}/_bmad/core/tasks/workflow.xml</critical>
+  <critical>You MUST have already loaded and processed this workflow's workflow.yaml</critical>
+  <critical>Communicate all responses in {communication_language} tailored to {user_skill_level}</critical>
+  <critical>Load td operations from: {td_ops}</critical>
+
+  <critical>🎯 RALPH WIGGUM LOOP: ONE TASK PER SESSION - NO EXCEPTIONS! 🎯</critical>
+  <critical>🔥 CRITICAL: Git commit with excellent message BEFORE td review submission! 🔥</critical>
+  <critical>This workflow implements ONE task only. After completion, user runs it again for next task.</critical>
+
+  <!-- ============================================ -->
+  <!-- STEP 1: Get Next Task                        -->
+  <!-- ============================================ -->
+  
+  <step n="1" goal="Initialize td session and get next task">
+    <action>Run `td usage --new-session` to initialize td context</action>
+    
+    <check if="{{td_issue_id}} is provided by user">
+      <action>Use the provided td issue ID directly</action>
+      <goto anchor="start_task" />
+    </check>
+    
+    <check if="{{story_file}} is provided">
+      <action>Load story file and extract td_epic_id from td Integration section</action>
+      <action>Run `td list --parent {td_epic_id} --status open --json` to get next task</action>
+      <action>Set {{td_issue_id}} to first open issue with no unmet dependencies</action>
+    </check>
+    
+    <check if="no specific task or story provided">
+      <action>Run `td next` to get highest priority open issue</action>
+      <action>Verify the issue has bmad tag (is part of story workflow)</action>
+      <action>Set {{td_issue_id}} from response</action>
+    </check>
+    
+    <check if="no ready tasks found">
+      <output>✅ **All tasks complete or blocked!**
+      
+      Run `td status` to see current state.
+      
+      **Possible next steps:**
+      - If all tasks closed: Run `/bmad:td:review-story` for epic-level review
+      - If tasks blocked: Check `td blocking` to see what's blocking
+      - If no td issues: Run `/bmad:td:create-story` first
+      </output>
+      <action>HALT - No work to do</action>
+    </check>
+    
+    <anchor id="start_task" />
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 2: Load Context                         -->
+  <!-- ============================================ -->
+  
+  <step n="2" goal="Start td issue and load full context">
+    <action>Run `td show {td_issue_id}` to get issue details</action>
+    
+    <action>Extract from td issue:
+      - Task description (title)
+      - Story file path (metadata.story_file)
+      - Task index (metadata.task_index)
+      - Parent epic ID (parent)
+    </action>
+    
+    <action>Set {{story_file}} = metadata.story_file</action>
+    <action>Set {{task_description}} = issue title</action>
+    <action>Set {{td_epic_id}} = parent epic ID</action>
+    
+    <action>Load the FULL story file: {{story_file}}</action>
+    <action>Parse sections: Story, Acceptance Criteria, Tasks/Subtasks, Dev Notes, td Integration</action>
+    
+    <action>Find the matching task in story file by td reference: [td:{{td_issue_id}}]</action>
+    <action>Extract task-specific context:
+      - AC references for this task
+      - Subtasks (if any)
+      - Relevant dev notes
+    </action>
+    
+    <action>Load {project_context} for coding standards (if exists)</action>
+    
+    <output>📋 **Task Loaded**
+    
+    **td Issue:** {{td_issue_id}}
+    **Task:** {{task_description}}
+    **Story File:** {{story_file}}
+    **Parent Epic:** {{td_epic_id}}
+    </output>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 3: Start Work                           -->
+  <!-- ============================================ -->
+  
+  <step n="3" goal="Mark task in progress and begin implementation">
+    <action>Run `td start {td_issue_id}` to mark in_progress</action>
+    <action>Run `td focus {td_issue_id}` to set as current focus</action>
+    <action>Run `td session "story-dev-{td_issue_id}"` to label session</action>
+    
+    <action>Update story file: Mark task as in-progress in td Sync Log</action>
+    
+    <output>🚀 **Starting Task**
+    
+    **Status:** in_progress
+    **Focus:** {{td_issue_id}}
+    
+    Following Ralph Wiggum loop - implementing ONE task only!
+    </output>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 4: Implement (Red-Green-Refactor)      -->
+  <!-- ============================================ -->
+  
+  <step n="4" goal="Implement single task following TDD">
+    <critical>IMPLEMENT ONLY THIS TASK - Do not touch other tasks!</critical>
+    
+    <action>Review task requirements from story file</action>
+    <action>Review related acceptance criteria</action>
+    <action>Review dev notes and architecture constraints</action>
+    
+    <!-- RED PHASE -->
+    <action>Write FAILING tests first for the task functionality</action>
+    <action>Confirm tests fail before implementation</action>
+    
+    <!-- GREEN PHASE -->
+    <action>Implement MINIMAL code to make tests pass</action>
+    <action>Handle error conditions and edge cases</action>
+    
+    <!-- REFACTOR PHASE -->
+    <action>Improve code structure while keeping tests green</action>
+    <action>Ensure code follows architecture patterns</action>
+    
+    <critical>DO NOT proceed until tests pass</critical>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 5: Validate Implementation              -->
+  <!-- ============================================ -->
+  
+  <step n="5" goal="Run all validations">
+    <action>Run all existing tests to ensure no regressions</action>
+    <action>Run new tests to verify implementation correctness</action>
+    <action>Run linting and code quality checks if configured</action>
+    
+    <action>Validate implementation satisfies task requirements</action>
+    <action>Validate related acceptance criteria are met</action>
+    
+    <check if="any tests fail">
+      <action>STOP and fix issues before continuing</action>
+      <action>Do NOT mark task complete until all tests pass</action>
+    </check>
+    
+    <check if="regression detected">
+      <action>STOP and fix regression immediately</action>
+    </check>
+    
+    <output>✅ **Validation Complete**
+    
+    All tests passing, no regressions detected.
+    </output>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 6: Update Story File                    -->
+  <!-- ============================================ -->
+  
+  <step n="6" goal="Update story file with progress">
+    <action>Mark task checkbox [x] in story file</action>
+    <action>Mark all subtasks [x] if applicable</action>
+    
+    <action>Update File List section with all changed files</action>
+    
+    <action>Add to Dev Agent Record → Completion Notes:
+      - What was implemented
+      - Key decisions made
+      - Tests added
+    </action>
+    
+    <action>Update td Sync Log:
+      | {timestamp} | task-complete | {td_issue_id}: {task_description} |
+    </action>
+    
+    <action>Save story file</action>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 7: GIT COMMIT (CRITICAL!)              -->
+  <!-- ============================================ -->
+  
+  <step n="7" goal="Commit changes with excellent message">
+    <critical>🔥 MUST COMMIT BEFORE td review submission! 🔥</critical>
+    
+    <action>Stage all changed files: `git add .`</action>
+    
+    <action>Craft excellent commit message following this format:</action>
+    
+    <example>
+feat(story-1.2): implement user authentication middleware
+
+Task: {task_description}
+Story: {story_key}
+td: {td_issue_id}
+
+- Implemented JWT token validation
+- Added rate limiting for auth endpoints
+- Created middleware for protected routes
+
+Tests:
+- Unit tests for token generation/validation
+- Integration tests for auth flow
+- Edge case handling for expired tokens
+
+Refs: {td_issue_id}
+    </example>
+    
+    <action>Commit message MUST include:
+      - Type prefix (feat/fix/refactor/test/docs)
+      - Story reference in scope
+      - Brief description
+      - Task details in body
+      - td issue reference
+      - Test summary
+      - `Refs: {td_issue_id}` footer
+    </action>
+    
+    <command>git commit -m "{commit_message}"</command>
+    
+    <check if="commit fails">
+      <action>Fix any issues and retry</action>
+      <action>DO NOT proceed to review without successful commit</action>
+    </check>
+    
+    <action>Store {{commit_hash}} from response</action>
+    
+    <output>📝 **Committed**
+    
+    **Commit:** {{commit_hash}}
+    **Message:** {commit_title}
+    </output>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 8: td Handoff                           -->
+  <!-- ============================================ -->
+  
+  <step n="8" goal="Create td handoff with implementation details">
+    <action>Build handoff with completion details:</action>
+    
+    <command>
+      td handoff {td_issue_id} \
+        --done "Implemented: {task_description}" \
+        --done "Tests: {test_summary}" \
+        --done "Commit: {commit_hash}" \
+        --decision "{any_key_decisions}" \
+        -m "Task complete, ready for review"
+    </command>
+    
+    <output>📋 **Handoff Recorded**
+    
+    td handoff created with implementation details.
+    </output>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 9: Submit for Review                    -->
+  <!-- ============================================ -->
+  
+  <step n="9" goal="Submit td issue for review">
+    <command>td review {td_issue_id} -m "Task complete. Commit: {commit_hash}"</command>
+    
+    <output>✅ **Submitted for Review**
+    
+    **td Issue:** {{td_issue_id}}
+    **Status:** in_review
+    
+    ⚠️ **Important:** A DIFFERENT session must approve this review!
+    td enforces review separation for quality.
+    </output>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 10: Check for More Tasks                -->
+  <!-- ============================================ -->
+  
+  <step n="10" goal="Check for remaining tasks and guide user">
+    <action>Run `td list --parent {td_epic_id} --status open` to check remaining tasks</action>
+    
+    <check if="open tasks remain">
+      <output>🎯 **Task Complete!**
+      
+      **Completed:** {{task_description}}
+      **Commit:** {{commit_hash}}
+      **Review:** Pending (different session must approve)
+      
+      **Remaining Tasks:** {{remaining_count}}
+      
+      **Next Steps:**
+      1. Wait for review approval (different session)
+      2. Run `/bmad:td:dev-next` to start next task
+      3. Or run `/bmad:td:review-task {td_issue_id}` in a NEW session to review
+      
+      💡 **Ralph Wiggum Loop:** One bite-sized chunk at a time!
+      </output>
+    </check>
+    
+    <check if="no open tasks remain">
+      <output>🎉 **All Tasks Complete!**
+      
+      **Story:** {{story_key}}
+      **Epic:** {{td_epic_id}}
+      
+      All tasks have been implemented and submitted for review.
+      
+      **Next Steps:**
+      1. Wait for all task reviews to be approved
+      2. Run `/bmad:td:review-story` for epic-level code review
+      3. After epic review approved, story is done!
+      
+      💡 **Tip:** Use a DIFFERENT session/LTM for the epic review.
+      </output>
+    </check>
+  </step>
+
+</workflow>

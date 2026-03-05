@@ -1,0 +1,225 @@
+<workflow>
+  <critical>The workflow execution engine is governed by: {project-root}/_bmad/core/tasks/workflow.xml</critical>
+  <critical>You MUST have already loaded and processed this workflow's workflow.yaml</critical>
+  <critical>Communicate all responses in {communication_language} and generate all documents in {document_output_language}</critical>
+  <critical>Load td operations from: {td_ops}</critical>
+
+  <critical>🔥 CRITICAL MISSION: Create BMAD story with td integration for maximum observability! 🔥</critical>
+  <critical>This workflow EXTENDS the BMM create-story workflow with td sync capabilities</critical>
+  <critical>td provides state/observability, BMAD provides structured planning artifacts</critical>
+
+  <!-- ============================================ -->
+  <!-- PHASE 1: Story Creation (Inherit from BMM)  -->
+  <!-- ============================================ -->
+  
+  <step n="1" goal="Initialize td session and determine target story">
+    <action>Run `td usage --new-session` to initialize td context</action>
+    
+    <!-- Story selection logic - same as BMM create-story -->
+    <check if="{{story_path}} is provided by user or user provided the epic and story number">
+      <action>Parse user-provided story path: extract epic_num, story_num, story_title</action>
+      <action>Set {{epic_num}}, {{story_num}}, {{story_key}} from user input</action>
+      <goto anchor="load_artifacts" />
+    </check>
+
+    <action>Check if {{sprint_status}} file exists for auto discover</action>
+    <check if="sprint status file does NOT exist">
+      <output>🚫 No sprint status file found and no story specified</output>
+      <output>
+        **Required Options:**
+        1. Run `sprint-planning` to initialize sprint tracking
+        2. Provide specific epic-story number (e.g., "1-2-user-auth")
+        3. Provide path to story documents
+      </output>
+      <ask>Choose option [1], provide epic-story number, path, or [q] to quit:</ask>
+      
+      <check if="user provides epic-story number">
+        <action>Parse and set {{epic_num}}, {{story_num}}, {{story_key}}</action>
+        <goto anchor="load_artifacts" />
+      </check>
+    </check>
+
+    <!-- Auto-discover from sprint status -->
+    <action>Load {{sprint_status}} file completely</action>
+    <action>Find FIRST story with status "backlog" matching pattern: number-number-name</action>
+    <action>Extract epic_num, story_num, story_key, story_title from found entry</action>
+    
+    <anchor id="load_artifacts" />
+  </step>
+
+  <step n="2" goal="Load and analyze core artifacts">
+    <critical>🔬 EXHAUSTIVE ARTIFACT ANALYSIS</critical>
+    
+    <invoke-protocol name="discover_inputs" />
+    
+    <action>From {epics_content}, extract Epic {{epic_num}} context:</action>
+    <action>Extract story ({{epic_num}}-{{story_num}}) details: user story, acceptance criteria, technical requirements</action>
+    
+    <!-- Previous story analysis -->
+    <check if="story_num > 1">
+      <action>Load previous story file from {implementation_artifacts}</action>
+      <action>Extract dev notes, learnings, patterns established</action>
+    </check>
+
+    <!-- Git intelligence -->
+    <check if="git repository detected">
+      <action>Get recent commits for work patterns and conventions</action>
+    </check>
+  </step>
+
+  <step n="3" goal="Architecture analysis for developer guardrails">
+    <critical>🏗️ ARCHITECTURE INTELLIGENCE</critical>
+    <action>Load and analyze architecture content for story-relevant requirements</action>
+    <action>Extract: technical stack, code structure, API patterns, security requirements, testing standards</action>
+  </step>
+
+  <step n="4" goal="Web research for latest technical specifics">
+    <critical>🌐 ENSURE LATEST TECH KNOWLEDGE</critical>
+    <action>Research latest versions of libraries/frameworks identified in architecture</action>
+  </step>
+
+  <step n="5" goal="Create comprehensive story file (BMM style)">
+    <critical>📝 CREATE STORY FILE - Developer's implementation guide</critical>
+    
+    <action>Initialize from template.md to {default_output_file}</action>
+    <template-output file="{default_output_file}">story_header</template-output>
+    <template-output file="{default_output_file}">story_requirements</template-output>
+    <template-output file="{default_output_file}">developer_context_section</template-output>
+    <template-output file="{default_output_file}">technical_requirements</template-output>
+    <template-output file="{default_output_file}">testing_requirements</template-output>
+    
+    <action>Set story Status to: "ready-for-dev"</action>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- PHASE 2: td Integration (NEW)               -->
+  <!-- ============================================ -->
+  
+  <step n="6" goal="Parse tasks for td creation">
+    <critical>📊 PREPARE TASKS FOR td SYNC</critical>
+    
+    <action>Parse the Tasks/Subtasks section from the created story file</action>
+    <action>For each task, extract:
+      - Task index (1, 2, 3...)
+      - Task description
+      - AC reference (if present)
+      - Dependencies (parse "(depends: task-N)" from description)
+    </action>
+    
+    <action>Store as {{tasks_list}} for td creation</action>
+    <action>Set {{td_task_count}} = length of tasks_list</action>
+    
+    <output>📋 Parsed {{td_task_count}} tasks for td sync</output>
+  </step>
+
+  <step n="7" goal="Create td epic for story">
+    <critical>🏷️ CREATE td EPIC</critical>
+    
+    <action>Construct epic title: "Story {{epic_num}}.{{story_num}}: {{story_title}}"</action>
+    <action>Construct epic body with:
+      - User story statement
+      - Acceptance criteria summary
+      - Link to story file path
+    </action>
+    
+    <command>
+      td add "Story {{epic_num}}.{{story_num}}: {{story_title}}" \
+        --type epic \
+        --tag bmad --tag epic --tag "epic-{{epic_num}}" \
+        --body "## Story&#10;{{user_story}}&#10;&#10;## Acceptance Criteria&#10;{{acceptance_criteria}}&#10;&#10;---&#10;📁 Story File: \`{{default_output_file}}\`"
+    </command>
+    
+    <action>Parse response to extract {{td_epic_id}}</action>
+    <action>Set {{sync_timestamp}} = current timestamp</action>
+    
+    <output>✅ Created td epic: {{td_epic_id}}</output>
+  </step>
+
+  <step n="8" goal="Create td issues for each task">
+    <critical>📋 CREATE td TASK ISSUES</critical>
+    
+    <action>Initialize {{td_task_mapping}} = empty list</action>
+    <action>Initialize {{dependency_registry}} = empty dict</action>
+    
+    <iterate over="tasks_list" index="i" item="task">
+      <action>Extract task description and any dependency hints</action>
+      
+      <check if="task has (depends: task-N)">
+        <action>Resolve dependency to td_issue_id from dependency_registry</action>
+        <action>Set {{depends_on_flag}} = "--depends-on {resolved_id}"</action>
+      </check>
+      <check if="no dependencies">
+        <action>Set {{depends_on_flag}} = ""</action>
+      </check>
+      
+      <command>
+        td add "{{task.description}}" \
+          --parent {{td_epic_id}} \
+          --tag bmad --tag task \
+          --body "**AC Reference:** {{task.ac_reference}}&#10;&#10;📁 Story File: \`{{default_output_file}}\`" \
+          --metadata story_file="{{default_output_file}}" \
+          --metadata task_index="{{i}}" \
+          {{depends_on_flag}}
+      </command>
+      
+      <action>Parse response to extract {{td_issue_id}}</action>
+      <action>Add to td_task_mapping: "Task {{i}} | {{td_issue_id}} | open"</action>
+      <action>Add to dependency_registry: task_index → td_issue_id</action>
+    </iterate>
+    
+    <output>✅ Created {{td_task_count}} td issues under epic {{td_epic_id}}</output>
+  </step>
+
+  <step n="9" goal="Update story file with td references">
+    <critical>📝 EMBED td REFERENCES IN STORY</critical>
+    
+    <action>Add "## td Integration" section to story file with:
+      - td Epic ID
+      - Task count summary
+      - Sync timestamp
+      - Task → td mapping table
+    </action>
+    
+    <action>Update each task line to include td reference:
+      "- [ ] Task 1 (AC: #1) [td:td-abc1]"
+    </action>
+    
+    <action>Add td Sync Log entry: "{{sync_timestamp}} | initialized | Story created with td epic {{td_epic_id}}"</action>
+    
+    <action>Save story file</action>
+  </step>
+
+  <step n="10" goal="Update sprint status and finalize">
+    <check if="sprint status file exists">
+      <action>Update {{sprint_status}}: story status = "ready-for-dev"</action>
+    </check>
+    
+    <output>
+**🎯 BMAD-TD STORY CREATED, {{user_name}}!**
+
+**Story Details:**
+- Story ID: {{epic_num}}.{{story_num}}
+- Story Key: {{story_key}}
+- File: {{default_output_file}}
+- Status: ready-for-dev
+
+**td Integration:**
+- td Epic: {{td_epic_id}}
+- td Tasks: {{td_task_count}} issues created
+- Sync Status: initialized
+
+**Next Steps:**
+1. Review the story file: {{default_output_file}}
+2. Run `/bmad:td:dev-next` to start the first task (Ralph Wiggum loop)
+3. Each task runs in its own session with td handoff/review flow
+4. After all tasks complete, run `/bmad:td:review-story` for epic-level review
+
+**Key Benefits:**
+- 📊 Full observability via sidecar
+- 🔄 Automatic status sync between story file and td
+- 🎯 Ralph Wiggum loop: one bite-sized chunk per session
+- ✅ Separate review sessions enforced by td
+    </output>
+  </step>
+
+</workflow>

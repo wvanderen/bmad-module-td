@@ -1,0 +1,310 @@
+<workflow>
+  <critical>The workflow execution engine is governed by: {project-root}/_bmad/core/tasks/workflow.xml</critical>
+  <critical>You MUST have already loaded and processed this workflow's workflow.yaml</critical>
+  <critical>Communicate all responses in {communication_language} tailored to {user_skill_level}</critical>
+  <critical>Load td operations from: {td_ops}</critical>
+
+  <critical>🔥 YOU ARE AN ADVERSARIAL CODE REVIEWER - Find what's wrong or missing! 🔥</critical>
+  <critical>CRITICAL: Must run in DIFFERENT session than implementation sessions!</critical>
+  <critical>This reviews the ENTIRE story at once, not individual tasks</critical>
+
+  <!-- ============================================ -->
+  <!-- STEP 1: Initialize Fresh Review Session      -->
+  <!-- ============================================ -->
+  
+  <step n="1" goal="Initialize FRESH review session">
+    <critical>MUST be different session than any implementation session</critical>
+    
+    <action>Run `td usage --new-session` to get FRESH context</action>
+    <action>Run `td session "review-story-{story_key}"` to label review session</action>
+    
+    <check if="{{td_epic_id}} is provided by user">
+      <goto anchor="verify_tasks" />
+    </check>
+    
+    <check if="{{story_file}} is provided">
+      <action>Load story file</action>
+      <action>Extract td_epic_id from td Integration section</action>
+      <goto anchor="verify_tasks" />
+    </check>
+    
+    <check if="no specific story/epic provided">
+      <action>Run `td reviewable` to list reviewable issues</action>
+      <ask>Which story epic would you like to review?</ask>
+      <action>Set {{td_epic_id}} from user selection</action>
+    </check>
+    
+    <anchor id="verify_tasks" />
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 2: Verify All Tasks Complete            -->
+  <!-- ============================================ -->
+  
+  <step n="2" goal="Verify all story tasks are approved">
+    <command>td list --parent {td_epic_id} --json</command>
+    
+    <action>Parse response to get all child issues with statuses</action>
+    <action>Count by status: open, in_progress, review, closed</action>
+    
+    <check if="any issues NOT closed">
+      <output>⚠️ **Cannot Review Story - Incomplete Tasks**
+      
+      **Story Epic:** {{td_epic_id}}
+      
+      **Task Status:**
+      - Open: {{open_count}}
+      - In Progress: {{in_progress_count}}
+      - In Review: {{review_count}}
+      - Closed: {{closed_count}}
+      
+      All tasks must be approved (closed) before epic-level review.
+      
+      **Next Steps:**
+      1. Check `td reviewable` for tasks awaiting review
+      2. Review and approve each task in separate sessions
+      3. Return here when all tasks are closed
+      </output>
+      <action>HALT - Cannot proceed with incomplete story</action>
+    </check>
+    
+    <output>✅ **All Tasks Approved**
+    
+    **Story Epic:** {{td_epic_id}}
+    **Tasks Closed:** {{closed_count}}
+    
+    Proceeding with epic-level review...
+    </output>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 3: Load Story Context                   -->
+  <!-- ============================================ -->
+  
+  <step n="3" goal="Load story file and implementation context">
+    <command>td show {td_epic_id}</command>
+    
+    <action>Extract story_file path from metadata</action>
+    <action>Load the FULL story file: {{story_file}}</action>
+    
+    <action>Parse story sections:
+      - User Story
+      - Acceptance Criteria
+      - Tasks/Subtasks (all should be [x])
+      - Dev Notes
+      - Dev Agent Record
+      - File List
+      - td Integration
+    </action>
+    
+    <action>Extract claimed File List - all files that were modified</action>
+    <action>Extract completion notes from Dev Agent Record</action>
+    
+    <output>📚 **Story Context Loaded**
+    
+    **Story File:** {{story_file}}
+    **Acceptance Criteria:** {{ac_count}} criteria
+    **Files Changed:** {{file_count}} files
+    **Tasks Complete:** {{task_count}}
+    </output>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 4: Discover Actual Changes              -->
+  <!-- ============================================ -->
+  
+  <step n="4" goal="Discover actual changes via git">
+    <action>Check if git repository detected</action>
+    
+    <check if="git repository exists">
+      <command>git log --oneline -20</command>
+      <action>Parse commits related to this story (look for story references)</action>
+      
+      <command>git diff --name-only main...HEAD</command>
+      <action>Get list of all changed files from commits</action>
+      
+      <action>Compare git changes with story File List:
+        - Files in git but not in story → documentation gap
+        - Files in story but not in git → possible false claim
+      </action>
+    </check>
+    
+    <check if="no git repository">
+      <output>ℹ️ No git repository detected - skipping change discovery</output>
+    </check>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 5: Adversarial Review                   -->
+  <!-- ============================================ -->
+  
+  <step n="5" goal="Execute adversarial code review">
+    <critical>VALIDATE EVERY CLAIM - Challenge implementation quality!</critical>
+    
+    <!-- AC Validation -->
+    <action>For EACH Acceptance Criterion:
+      1. Read the AC requirement
+      2. Search implementation files for evidence
+      3. Determine: IMPLEMENTED, PARTIAL, or MISSING
+      4. If MISSING/PARTIAL → HIGH SEVERITY finding
+    </action>
+    
+    <!-- Task Completion Audit -->
+    <action>For EACH task marked [x]:
+      1. Verify evidence exists in code
+      2. Check related tests exist and pass
+      3. If marked [x] but NOT DONE → CRITICAL finding
+    </action>
+    
+    <!-- Code Quality Deep Dive -->
+    <action>For EACH file in File List:
+      1. **Security**: Injection risks, missing validation, auth issues
+      2. **Performance**: N+1 queries, inefficient loops, missing caching
+      3. **Error Handling**: Missing try/catch, poor error messages
+      4. **Code Quality**: Complex functions, magic numbers, poor naming
+      5. **Test Quality**: Real assertions or placeholders
+    </action>
+    
+    <check if="total_issues_found lt 3">
+      <critical>NOT LOOKING HARD ENOUGH - Find more problems!</critical>
+      <action>Re-examine for edge cases, null handling, architecture violations</action>
+    </check>
+    
+    <action>Categorize findings:
+      - CRITICAL: Tasks marked done but not implemented, security issues
+      - HIGH: ACs not implemented, missing tests
+      - MEDIUM: Performance issues, code quality
+      - LOW: Style improvements, documentation
+    </action>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 6: Present Findings                     -->
+  <!-- ============================================ -->
+  
+  <step n="6" goal="Present review findings">
+    <output>**🔥 EPIC-LEVEL CODE REVIEW FINDINGS**
+
+**Story:** {{story_file}}
+**Epic:** {{td_epic_id}}
+
+## Summary
+- **Critical Issues:** {{critical_count}}
+- **High Issues:** {{high_count}}
+- **Medium Issues:** {{medium_count}}
+- **Low Issues:** {{low_count}}
+
+## 🔴 CRITICAL ISSUES
+{{#each critical_issues}}
+- {{this.description}} [{{this.file}}:{{this.line}}]
+{{/each}}
+
+## 🟠 HIGH ISSUES
+{{#each high_issues}}
+- {{this.description}} [{{this.file}}:{{this.line}}]
+{{/each}}
+
+## 🟡 MEDIUM ISSUES
+{{#each medium_issues}}
+- {{this.description}}
+{{/each}}
+
+## 🟢 LOW ISSUES
+{{#each low_issues}}
+- {{this.description}}
+{{/each}}
+    </output>
+    
+    <ask>What should I do with these findings?
+
+1. **Fix them** - I'll fix issues and update code
+2. **Create followup tasks** - Add td issues for later
+3. **Show details** - Deep dive into specific issues
+
+Choose [1], [2], or specify which issue to examine:</ask>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 7: Handle Findings                      -->
+  <!-- ============================================ -->
+  
+  <step n="7" goal="Handle review findings">
+    <check if="user chooses '1' (fix)">
+      <action>Fix all CRITICAL and HIGH issues in code</action>
+      <action>Add/update tests as needed</action>
+      <action>Update File List if files changed</action>
+      <action>Commit fixes with message: "fix(review): address epic review findings"</action>
+      <action>Set {{new_status}} = "done" if no remaining issues</action>
+      <action>Set {{new_status}} = "in-progress" if issues remain</action>
+    </check>
+    
+    <check if="user chooses '2' (create tasks)">
+      <iterate over="findings">
+        <command>
+          td add "[Review] {{finding.description}}" \
+            --parent {td_epic_id} \
+            --tag bmad --tag review-followup \
+            --tag "severity-{{finding.severity}}" \
+            --body "File: {{finding.file}}:{{finding.line}}&#10;&#10;{{finding.details}}"
+        </command>
+      </iterate>
+      
+      <action>Set {{new_status}} = "in-progress"</action>
+      <output>Created {{followup_count}} followup tasks in td</output>
+    </check>
+    
+    <check if="no CRITICAL or HIGH issues and all ACs implemented">
+      <action>Set {{new_status}} = "done"</action>
+    </check>
+  </step>
+
+  <!-- ============================================ -->
+  <!-- STEP 8: Update Story Status                  -->
+  <!-- ============================================ -->
+  
+  <step n="8" goal="Update story and td status">
+    <action>Update story file Status field to: {{new_status}}</action>
+    
+    <action>Add to story file - Senior Developer Review section:
+      ## Senior Developer Review (AI)
+      
+      **Date:** {{date}}
+      **Outcome:** {{review_outcome}}
+      **Action Items:** {{action_item_count}}
+      
+      ### Summary
+      {{review_summary}}
+      
+      ### Action Items
+      {{#each findings}}
+      - [ ] [{{this.severity}}] {{this.description}}
+      {{/each}}
+    </action>
+    
+    <action>Update td Sync Log in story file</action>
+    <action>Save story file</action>
+    
+    <check if="{{new_status}} == 'done'">
+      <command>td approve {td_epic_id} -m "Story reviewed and approved"</command>
+      <output>✅ **Story Approved!**
+      
+      **Epic:** {{td_epic_id}}
+      **Status:** closed
+      
+      Story is complete and approved!
+      </output>
+    </check>
+    
+    <check if="{{new_status}} == 'in-progress'">
+      <command>td review {td_epic_id} -m "Review complete - followup tasks created"</command>
+      <output>🔄 **Review Complete - Followup Required**
+      
+      **Epic:** {{td_epic_id}}
+      **Followup Tasks:** {{followup_count}}
+      
+      Address the followup tasks then run review again.
+      </output>
+    </check>
+  </step>
+
+</workflow>

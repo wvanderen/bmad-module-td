@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "bmad-td-monorepo",
+  "name": "@wvanderen/bmad-module-td",
   "version": "0.1.12",
-  "description": "Monorepo for BMAD td module and Pi autopilot",
+  "description": "BMAD expansion module for td CLI integration - td provides state, BMAD provides structure",
   "keywords": [
     "bmad",
     "td",
@@ -16,10 +16,11 @@
   },
   "license": "MIT",
   "author": "BMad Method",
-  "private": true,
+  "main": "",
+  "bin": {},
   "scripts": {
-    "sync:module": "node scripts/sync-td-integration.mjs --source-dir packages/bmad-module-td",
-    "sync:check": "node scripts/sync-td-integration.mjs --check --source-dir packages/bmad-module-td",
+    "sync:module": "node ../../scripts/sync-td-integration.mjs --source-dir packages/bmad-module-td",
+    "sync:check": "node ../../scripts/sync-td-integration.mjs --check --source-dir packages/bmad-module-td",
     "format:check": "prettier --check \"**/*.{js,cjs,mjs,json,yaml}\"",
     "format:fix": "prettier --write \"**/*.{js,cjs,mjs,json,yaml}\"",
     "lint": "eslint . --ext .js,.cjs,.mjs,.yaml --max-warnings=0",
@@ -32,9 +33,6 @@
     "release:prerelease": "npm version prerelease && git push --follow-tags && npm publish --access public",
     "test": "npm run sync:check && npm run lint && npm run format:check"
   },
-  "workspaces": [
-    "packages/*"
-  ],
   "devDependencies": {
     "prettier": "^3.7.4",
     "markdownlint-cli2": "^0.19.1"
@@ -42,5 +40,24 @@
   "engines": {
     "node": ">=22.0.0"
   },
-  "files": []
+  "files": [
+    "data",
+    "templates",
+    "tools",
+    "workflows",
+    "module-help.csv",
+    "module.yaml"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "bmad": {
+    "moduleType": "expansion",
+    "requires": [
+      "bmm"
+    ],
+    "provides": [
+      "td-integration"
+    ]
+  }
 }

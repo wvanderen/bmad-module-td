@@ -1,0 +1,33 @@
+<workflow>
+  <critical>The workflow execution engine is governed by: {project-root}/_bmad/core/tasks/workflow.xml</critical>
+  <critical>You MUST have already loaded and processed this workflow's workflow.yaml</critical>
+  <critical>Communicate all responses in {communication_language} tailored to {user_skill_level}</critical>
+  <critical>Validation methodology is a critical control: reviews should not rely on tests alone.</critical>
+
+  <step n="1" goal="Assess readiness and existing validation state">
+    <action>Run `td usage --new-session` if needed, otherwise `td usage -q`</action>
+    <action>Inspect whether {validation_methodology_file} already exists</action>
+    <action>Inspect {architecture_file} if present to infer stack and runtime components</action>
+    <action>Detect available project verification commands (tests, lint, typecheck, build, smoke/integration)</action>
+  </step>
+
+  <step n="2" goal="Build or update validation methodology config">
+    <action>Create or update {validation_methodology_file} using {validation_template}</action>
+    <action>Populate command gates with discovered project commands and deterministic pass criteria</action>
+    <action>Define mandatory review evidence requirements (command outputs, changed files, risk notes)</action>
+    <action>Define fallback policy when a gate is unavailable (for example: mark as skipped with rationale and compensating checks)</action>
+    <action>Prefer defaults and ask only when a missing decision changes review rigor materially</action>
+  </step>
+
+  <step n="3" goal="Integrate with td execution flow">
+    <action>Create or update a td task dedicated to validation methodology maintenance when one does not exist</action>
+    <action>Add dependencies so critical review tasks can reference the validation methodology task when appropriate</action>
+    <action>Record location of {validation_methodology_file} in task metadata or handoff notes</action>
+  </step>
+
+  <step n="4" goal="Verify and hand off">
+    <action>Run configured gates that are executable in current context and capture baseline results</action>
+    <action>Report configured mandatory gates, optional gates, fallback policy, and current baseline pass/fail status</action>
+    <output>Validation methodology configured. `next-step` reviews and implementations must use this file as a critical verification gate.</output>
+  </step>
+</workflow>
