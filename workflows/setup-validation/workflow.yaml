@@ -1,0 +1,24 @@
+name: setup-validation
+description: "Define and maintain a project-specific validation methodology used as a critical gate for implementation and review workflows."
+
+# Critical variables from config (inherited from core)
+user_name: "{config:user_name}"
+communication_language: "{config:communication_language}"
+user_skill_level: "{config:user_skill_level}"
+document_output_language: "{config:document_output_language}"
+date: system-generated
+
+# Paths
+planning_artifacts: "{config:output_folder}"
+validation_methodology_file: "{config:validation_methodology_file}"
+architecture_file: "{planning_artifacts}/architecture.md"
+
+# Workflow components
+instructions: "instructions.xml"
+
+# Templates and tools
+validation_template: "templates/validation-methodology-template.yaml"
+td_ops: "tools/td-ops.xml"
+
+# Options
+accept_defaults: true

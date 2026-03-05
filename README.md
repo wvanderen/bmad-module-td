@@ -4,7 +4,7 @@ A BMAD Method module for integrating with td CLI task management.
 
 ## Overview
 
-This module connects BMAD planning artifacts with td CLI for enhanced observability and the Ralph Wiggum development loop.
+This module connects BMAD planning artifacts with td CLI using a focused command model.
 
 **Philosophy:** td is state, BMAD is structure
 
@@ -30,29 +30,31 @@ npx bmad-method install --custom-content ./node_modules/@wvanderen/bmad-module-t
 - Git repository
 - BMM module (planning artifacts)
 
-## Core Workflows
+## Commands
 
-| Workflow        | Command                  | Description                             |
-| --------------- | ------------------------ | --------------------------------------- |
-| create-td-story | `/bmad:td:create-story`  | Create story with td epic + task issues |
-| td-dev-next     | `/bmad:td:dev-next`      | Ralph Wiggum loop - implement next task |
-| td-dev-task     | `/bmad:td:dev-task <id>` | Implement specific task by td ID        |
-| td-review-story | `/bmad:td:review-story`  | Epic-level code review                  |
-| td-sync         | `/bmad:td:sync`          | Bidirectional sync story ↔ td           |
-| td-status       | `/bmad:td:status`        | Show story td integration status        |
+| Command                     | Description                                                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `/bmad:td:initialize`       | Accept-default onboarding for greenfield or brownfield projects; sets up BMAD artifacts and td dependency mapping |
+| `/bmad:td:setup-validation` | Configure project validation methodology used as a critical verification gate                                     |
+| `/bmad:td:next-step`        | Unified executor that analyzes workspace state and performs the highest-priority action                           |
 
-## Ralph Wiggum Loop
+## next-step Priority
 
-The td-dev-next workflow implements one task per session for maximum speed and reduced context rot:
+The `next-step` workflow uses this strict priority order:
 
-1. `td next` - Get next ready task
-2. Load story context
-3. Implement single task (TDD)
-4. Validate tests pass
-5. Update story file
-6. **Git commit** (excellent message)
-7. `td handoff` - Capture details
-8. `td review` - Submit for review
+1. Reviews (highest)
+2. Implement ready issues
+3. Epic workflows (create-story for empty epics, code-review for completed epics)
+
+`next-step` runs entirely from its workflow instructions and does not depend on an external skill file.
+
+## Validation Methodology
+
+`setup-validation` creates and maintains a project-specific validation config at `{config:validation_methodology_file}`.
+
+- This is a critical review and implementation gate.
+- Agents must verify changes beyond tests (for example: lint, typecheck, build, smoke, security checks where available).
+- If validation config is missing, `next-step` runs fallback checks and reports reduced confidence.
 
 ## Commit Message Format
 
@@ -73,7 +75,25 @@ Refs: {td_issue_id}
 
 ## Development
 
+### Workspace Layout
+
+- `.`: BMAD td module package source (publishable)
+- `packages/pi-bmad-autopilot`: Pi autopilot workspace package
+- `examples/pi-extension`: extension file used for local Pi installation
+
+Operational details: `docs/monorepo-ops.md`
+
+### Sync Source -> Installable Mirror
+
+`_bmad/td-integration` is treated as an installable mirror of module source files.
+
 ```bash
+# Sync source files into _bmad/td-integration mirror
+npm run sync:module
+
+# Check mirror drift (used in test)
+npm run sync:check
+
 # Run linting
 npm run lint
 
@@ -83,6 +103,15 @@ npm run format:fix
 # Run tests
 npm test
 ```
+
+## Pi Extension Prototype
+
+This repository includes a local Pi extension prototype for autonomous BMAD execution:
+
+- `examples/pi-extension/bmad-autopilot.ts`
+- `examples/pi-extension/README.md`
+
+It provides an autopilot loop for `/bmad:td:initialize -> /bmad:td:next-step`, workflow monitoring, and checkpoint-based session dive tools.
 
 ## Publishing
 

@@ -1,0 +1,68 @@
+version: 1
+updated_by: "{user_name}"
+updated_at: "{date}"
+
+policy:
+  description: "Project-specific verification methodology for implementation and review."
+  critical: true
+  require_evidence: true
+  allow_skips_with_rationale: true
+
+gates:
+  mandatory:
+    - id: tests
+      description: "Run test suite for affected scope"
+      command: "npm test"
+      pass_criteria: "Exit code 0"
+      required_for:
+        - implementation
+        - review
+
+    - id: lint
+      description: "Run lint checks"
+      command: "npm run lint"
+      pass_criteria: "Exit code 0"
+      required_for:
+        - implementation
+        - review
+
+    - id: typecheck
+      description: "Run type checks when available"
+      command: "npm run typecheck"
+      pass_criteria: "Exit code 0"
+      required_for:
+        - implementation
+        - review
+      optional_if_missing: true
+
+    - id: build
+      description: "Build production artifact when applicable"
+      command: "npm run build"
+      pass_criteria: "Exit code 0"
+      required_for:
+        - review
+      optional_if_missing: true
+
+  optional:
+    - id: smoke
+      description: "Smoke test core user journey"
+      command: "npm run smoke"
+      pass_criteria: "Core journey passes"
+
+    - id: security
+      description: "Run dependency or static security scan"
+      command: "npm run security"
+      pass_criteria: "No blocking vulnerabilities"
+
+review_requirements:
+  must_include:
+    - "Changed files list"
+    - "Gate results (pass/fail/skip with reason)"
+    - "Risk notes"
+    - "Follow-up issues for deferred risks"
+
+fallback:
+  when_config_missing:
+    - "Run tests, lint, typecheck, build, and smoke checks where available"
+    - "Mark confidence as reduced"
+    - "Create or prioritize setup-validation task"

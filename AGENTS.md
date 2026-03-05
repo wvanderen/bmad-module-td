@@ -12,35 +12,39 @@ Use td usage -q for subsequent reads.
 **Purpose:** Integrates BMAD planning artifacts with td CLI task management.
 
 **Philosophy:** td is state, BMAD is structure
+
 - BMAD `.md` files hold structured planning artifacts (epics, stories, architecture)
 - td issues hold execution state (status, dependencies, reviews)
 - sidecar provides observability
 
 **Core Workflows:**
 
-| Workflow | Command | Description |
-|----------|---------|-------------|
-| create-td-story | `/bmad:td:create-story` | Create story with td epic + task issues |
-| td-dev-next | `/bmad:td:dev-next` | Ralph Wiggum loop - implement next task |
-| td-dev-task | `/bmad:td:dev-task <id>` | Implement specific task by td ID |
-| td-review-story | `/bmad:td:review-story` | Epic-level code review |
-| td-sync | `/bmad:td:sync` | Bidirectional sync story ↔ td |
-| td-status | `/bmad:td:status` | Show story td integration status |
+| Workflow         | Command                     | Description                                                           |
+| ---------------- | --------------------------- | --------------------------------------------------------------------- |
+| initialize       | `/bmad:td:initialize`       | Accept-default onboarding for greenfield or brownfield projects       |
+| setup-validation | `/bmad:td:setup-validation` | Configure project validation methodology and quality gates            |
+| next-step        | `/bmad:td:next-step`        | Unified workflow: review, implement, or epic action based on priority |
 
-**Ralph Wiggum Loop:**
+**next-step Priority:**
 
-The td-dev-next workflow implements one task per session for maximum speed and reduced context rot:
+The next-step workflow analyzes workspace state and executes the highest-priority action:
 
-1. `td next` - Get next ready task
-2. Load story context
-3. Implement single task (TDD)
-4. Validate tests pass
-5. Update story file
-6. **Git commit** (excellent message)
-7. `td handoff` - Capture details
-8. `td review` - Submit for review
+1. Reviews (highest)
+2. Implement ready issues
+3. Epic workflows (create-story for empty epics, code-review for completed epics)
+
+next-step runs from workflow instructions directly and does not require an external skill file.
+
+**Validation Methodology Gate:**
+
+Validation methodology is a critical review control.
+
+- Configure it with `/bmad:td:setup-validation`
+- next-step must use it for review and implementation verification
+- If it is missing, next-step must run fallback checks and flag reduced confidence
 
 **Commit Message Format:**
+
 ```
 feat(story-X.Y): brief description
 
@@ -72,10 +76,10 @@ td enforces review separation - you cannot approve issues you implemented. Alway
 
 ### Task → td Mapping
 
-| Task | td Issue | Status |
-|------|----------|--------|
-| Task 1 | `td-abc2` | closed |
-| Task 2 | `td-abc3` | closed |
+| Task   | td Issue  | Status      |
+| ------ | --------- | ----------- |
+| Task 1 | `td-abc2` | closed      |
+| Task 2 | `td-abc3` | closed      |
 | Task 3 | `td-abc4` | in_progress |
 ```
 

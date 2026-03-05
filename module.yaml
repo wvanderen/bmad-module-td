@@ -3,24 +3,23 @@ name: "TD Integration"
 header: "BMAD + td CLI Integration"
 subheader: "Connect planning artifacts to task management"
 description: |
-  Integrates BMAD planning artifacts with td CLI task management for enhanced observability and the Ralph Wiggum loop.
-  
+  Integrates BMAD planning artifacts with td CLI task management using a focused command model.
+
   **Philosophy:** td is state, BMAD is structure
   - BMAD `.md` files hold structured planning artifacts (epics, stories, architecture)
   - td issues hold execution state (status, dependencies, reviews)
   - sidecar provides observability
-  
+
   **Key Features:**
-  - create-td-story: Creates story with td epic + task issues
-  - td-dev-next: Ralph Wiggum loop - one task per session
-  - td-review-story: Epic-level code review
-  - td-sync: Bidirectional sync story ↔ td
-  
+  - initialize: Accept-default onboarding for greenfield and brownfield projects
+  - setup-validation: Define configurable validation methodology and quality gates
+  - next-step: Unified executor for review, implementation, and epic workflow actions
+
   **Requirements:**
   - td CLI installed and initialized
   - Git repository
   - BMM module (planning artifacts)
-  
+
 default_selected: false
 
 # Module dependencies
@@ -46,6 +45,11 @@ auto_sync:
 session_prefix:
   prompt: "Session name prefix for td sessions?"
   default: "bmad-story"
+  result: "{value}"
+
+validation_methodology_file:
+  prompt: "Where should validation methodology config be stored?"
+  default: "{config:output_folder}/validation-methodology.yaml"
   result: "{value}"
 
 # Variables from Core Config inserted:

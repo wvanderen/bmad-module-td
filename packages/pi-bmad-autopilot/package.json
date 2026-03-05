@@ -1,0 +1,13 @@
+{
+  "name": "@wvanderen/pi-bmad-autopilot",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Pi extension wrappers and autopilot loop for BMAD td workflows",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ]
+}

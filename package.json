@@ -19,6 +19,8 @@
   "main": "",
   "bin": {},
   "scripts": {
+    "sync:module": "node scripts/sync-td-integration.mjs",
+    "sync:check": "node scripts/sync-td-integration.mjs --check",
     "format:check": "prettier --check \"**/*.{js,cjs,mjs,json,yaml}\"",
     "format:fix": "prettier --write \"**/*.{js,cjs,mjs,json,yaml}\"",
     "lint": "eslint . --ext .js,.cjs,.mjs,.yaml --max-warnings=0",
@@ -29,8 +31,11 @@
     "release:minor": "npm version minor && git push --follow-tags && npm publish --access public",
     "release:patch": "npm version patch && git push --follow-tags && npm publish --access public",
     "release:prerelease": "npm version prerelease && git push --follow-tags && npm publish --access public",
-    "test": "npm run lint && npm run format:check"
+    "test": "npm run sync:check && npm run lint && npm run format:check"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "devDependencies": {
     "prettier": "^3.7.4",
     "markdownlint-cli2": "^0.19.1"
