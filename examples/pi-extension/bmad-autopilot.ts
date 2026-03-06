@@ -43,6 +43,7 @@ interface RunState {
   stopReason: string | null;
   checkpoints: Checkpoint[];
   awaitingCommand: string | null;
+  awaitingPrompt: string | null;
   freshSessionBetweenSteps: boolean;
 }
 
@@ -63,6 +64,7 @@ const newRunState = (): RunState => ({
   stopReason: null,
   checkpoints: [],
   awaitingCommand: null,
+  awaitingPrompt: null,
   freshSessionBetweenSteps: true,
 });
 
@@ -300,6 +302,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       : { deliverAs: "followUp" as const };
     pi.sendUserMessage(prompt, options);
     state.awaitingCommand = command;
+    state.awaitingPrompt = prompt;
     state.lastCommand = command;
     state.lastProgressAt = Date.now();
     persistState(`queued:${command}`);
@@ -315,6 +318,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
 
     if (typeof maybeNewSession === "function") {
       state.awaitingCommand = null;
+      state.awaitingPrompt = null;
       persistState("direct-session-hop-attempt");
       updateUi(ctx);
 
@@ -333,6 +337,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         .catch(() => {
           if (!state.active || state.phase !== "running") return;
           state.awaitingCommand = CONTINUE_COMMAND;
+          state.awaitingPrompt = CONTINUE_COMMAND;
           persistState("queue-session-hop-fallback-command");
           updateUi(ctx);
 
@@ -346,6 +351,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     }
 
     state.awaitingCommand = CONTINUE_COMMAND;
+    state.awaitingPrompt = CONTINUE_COMMAND;
     persistState("queue-session-hop");
     updateUi(ctx);
 
@@ -357,6 +363,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
 
   const compactAndQueueNextStep = (ctx: ExtensionContext): void => {
     state.awaitingCommand = null;
+    state.awaitingPrompt = null;
     persistState("compact-before-next-step");
     updateUi(ctx);
 
@@ -408,6 +415,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     state.phase = phase;
     state.stopReason = reason;
     state.awaitingCommand = null;
+    state.awaitingPrompt = null;
     state.lastProgressAt = Date.now();
     persistState(`stop:${phase}`);
     updateUi(ctx);
@@ -462,7 +470,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
   pi.on("agent_start", async (event, ctx) => {
     currentPrompt = typeof event.prompt === "string" ? event.prompt.trim() : "";
     if (!state.active) return;
-    if (state.awaitingCommand) {
+    if (state.awaitingPrompt && currentPrompt === state.awaitingPrompt) {
       state.lastProgressAt = Date.now();
       updateUi(ctx);
     }
@@ -478,6 +486,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     )
       return;
     if (!state.awaitingCommand) return;
+    if (!state.awaitingPrompt || currentPrompt !== state.awaitingPrompt) return;
 
     const completedCommand = state.awaitingCommand;
 
@@ -598,6 +607,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       if (!state.active || state.phase !== "running") return;
 
       state.awaitingCommand = null;
+      state.awaitingPrompt = null;
       persistState("session-hop-command-received");
       updateUi(ctx);
 
@@ -695,6 +705,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         freshSessionBetweenSteps: parsed.sameSession ? false : true,
         lastProgressAt: now,
         awaitingCommand: parsed.skipInit ? NEXT_STEP_COMMAND : INIT_COMMAND,
+        awaitingPrompt: null,
       };
 
       persistState("start");
@@ -750,6 +761,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       state.phase = "running";
       state.stopReason = null;
       state.awaitingCommand = NEXT_STEP_COMMAND;
+      state.awaitingPrompt = null;
       persistState("resume");
       updateUi(ctx);
 
