@@ -14,6 +14,7 @@ description: |
   - initialize: Accept-default onboarding for greenfield and brownfield projects
   - setup-validation: Define configurable validation methodology and quality gates
   - next-step: Unified executor for review, implementation, and epic workflow actions
+  - validate-prd: Check completed work against PRD requirements, create td gaps, and continue execution
 
   **Requirements:**
   - td CLI installed and initialized

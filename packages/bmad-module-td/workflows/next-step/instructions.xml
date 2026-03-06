@@ -14,6 +14,7 @@
     <action>Run `td ready` and capture all issues ready for implementation</action>
     <action>Run `td status` to capture global queue health and blockers</action>
     <action>Inspect BMAD planning artifacts to identify empty epics and epics with all tasks complete</action>
+    <action>Determine whether td execution is otherwise drained and completion validation against the PRD should run after epic maintenance</action>
     <action>Load project context from {project_context} if present</action>
     <action>Load validation methodology from {validation_methodology_file} if present</action>
     <action>Infer validation context for the current issue from issue description, linked story context, changed surfaces, and validation defaults (project type, platform, requirement classes)</action>
@@ -29,6 +30,7 @@
     <action>2) Implement ready issues: if no reviews exist and ready items exist, choose the highest-priority ready item</action>
     <action>3) Epic workflows: if no reviewable or ready items exist, run epic maintenance</action>
     <action>For epic maintenance: if an epic has no child tasks, run BMAD create-story flow; if an epic has all tasks approved/closed, run BMAD code-review flow</action>
+    <action>4) PRD validation: if no reviewable or ready items exist and no epic maintenance remains, run BMAD td validate-prd to identify uncovered requirements and create follow-up td work</action>
     <check if="multiple candidates have equal priority and no deterministic tie-break exists">
       <ask>Ask one targeted question with a recommended default tie-break, and explain outcome impact</ask>
     </check>
@@ -63,6 +65,12 @@
     <check if="selected action is epic workflow">
       <action>For empty epics, execute BMAD create-story and synchronize td mapping/dependencies</action>
       <action>For completed epics, execute BMAD code-review and record outcome in td</action>
+    </check>
+
+    <check if="selected action is prd validation">
+      <action>Execute BMAD td validate-prd directly from workflow files</action>
+      <action>Create or reuse td tasks for each actionable missing or partial PRD requirement</action>
+      <action>Record which requirements are fully covered, which gaps were converted into td work, and whether any residual risk remains</action>
     </check>
   </step>
 

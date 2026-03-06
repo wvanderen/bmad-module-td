@@ -1,0 +1,49 @@
+<workflow>
+  <critical>The workflow execution engine is governed by: {project-root}/_bmad/core/tasks/workflow.xml</critical>
+  <critical>You MUST have already loaded and processed this workflow's workflow.yaml</critical>
+  <critical>Communicate all responses in {communication_language} tailored to {user_skill_level}</critical>
+  <critical>Execute this workflow directly from these instructions. Do not rely on an external skill file.</critical>
+  <critical>The goal is traceability after delivery: compare implemented work against the PRD, convert actionable gaps into td work, and stop.</critical>
+
+  <step n="1" goal="Confirm completion-validation context">
+    <action>Run `td usage --new-session` if this is a fresh context; otherwise run `td usage -q`</action>
+    <action>Run `td reviewable`, `td ready`, and `td status` to confirm the current queue state</action>
+    <action>Load project context from {project_context} if present</action>
+    <action>Load validation methodology from {validation_methodology_file} if present so evidence expectations stay consistent</action>
+    <action>Load the PRD, epics/stories, and related planning artifacts from the BMAD workspace</action>
+    <check if="reviewable or ready td issues exist">
+      <output>Execution work is not drained yet. Run `/bmad:td:next-step` first, then return to `/bmad:td:validate-prd` after the queue is clear.</output>
+      <action>HALT</action>
+    </check>
+    <check if="no PRD can be located">
+      <output>No PRD was found, so PRD traceability cannot be completed with confidence. Recommend creating or restoring the PRD before using this workflow.</output>
+      <action>HALT</action>
+    </check>
+  </step>
+
+  <step n="2" goal="Build requirement coverage map">
+    <action>Read the PRD completely, including sharded sections when present</action>
+    <action>Extract each functional requirement, non-functional requirement, constraint, and explicitly testable acceptance expectation</action>
+    <action>Trace each requirement to available evidence in epics, stories, td issues, commits, changed files, and tests</action>
+    <action>Classify each requirement as covered, partial, missing, duplicate, or intentionally deferred</action>
+    <action>Call out any requirement that exists in the PRD but is absent from stories or absent from delivered implementation evidence</action>
+  </step>
+
+  <step n="3" goal="Convert gaps into td work">
+    <action>Review existing td issues first to avoid creating duplicates for known gaps</action>
+    <action>For each actionable missing or partial requirement, create or reuse a td task with requirement references in the title or body</action>
+    <action>Attach each new task to the most relevant story or epic when possible; otherwise create standalone follow-up work with enough context to continue execution</action>
+    <action>Set priority by impact: blockers, security, compliance, or data-loss gaps highest; core user flow gaps next; quality and polish gaps lower</action>
+    <check if="no actionable gaps are found">
+      <action>Record that PRD coverage validation passed with no new td tasks required</action>
+    </check>
+  </step>
+
+  <step n="4" goal="Report results and next action">
+    <action>Report which artifacts were inspected and summarize the requirement coverage outcome</action>
+    <action>List requirements classified as partial or missing, grouped by severity</action>
+    <action>List td tasks created or reused for each actionable gap</action>
+    <action>If new td tasks were created, state that `/bmad:td:next-step` can continue execution from the new queue</action>
+    <action>If no new td tasks were needed, state that PRD traceability validation completed and note any residual risks or follow-up recommendations</action>
+  </step>
+</workflow>

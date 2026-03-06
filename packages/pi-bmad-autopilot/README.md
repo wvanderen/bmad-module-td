@@ -8,7 +8,7 @@ Current source of truth:
 
 `npm pack`/`npm publish` sync that file into `packages/pi-bmad-autopilot/src/bmad-autopilot.ts` so published installs ship the actual extension source.
 
-Otto also supports optional JSON preferences from `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, or `BMAD_AUTOPILOT_CONFIG`. Use `workflows.commandModes` to opt workflows like `/bmad:bmm:create-architecture` into `party` mode.
+Otto also supports optional JSON preferences from `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, or `BMAD_AUTOPILOT_CONFIG`. Use `workflows.commandModes` to opt workflows like `/bmad:bmm:create-architecture` or `/bmad:td:validate-prd` into `party` mode.
 
 ## Publishing
 

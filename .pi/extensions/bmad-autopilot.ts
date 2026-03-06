@@ -9,12 +9,14 @@ import type {
 
 const INIT_COMMAND = "/bmad:td:initialize";
 const NEXT_STEP_COMMAND = "/bmad:td:next-step";
+const VALIDATE_PRD_COMMAND = "/bmad:td:validate-prd";
 const CONTINUE_COMMAND = "/bmad-auto-continue";
 const STATE_ENTRY_TYPE = "bmad-autopilot-state";
 
 type WorkflowCommand =
   | "/bmad:td:initialize"
   | "/bmad:td:next-step"
+  | "/bmad:td:validate-prd"
   | "/bmad:bmm:create-architecture"
   | "/bmad:bmm:create-epics-and-stories"
   | "/bmad:bmm:create-story"
@@ -75,6 +77,7 @@ interface RunState {
   lastError: string | null;
   lastProgressAt: number;
   stopReason: string | null;
+  emptyQueuePasses: number;
   checkpoints: Checkpoint[];
   awaitingCommand: string | null;
   awaitingPrompt: string | null;
@@ -96,6 +99,7 @@ const newRunState = (): RunState => ({
   lastError: null,
   lastProgressAt: Date.now(),
   stopReason: null,
+  emptyQueuePasses: 0,
   checkpoints: [],
   awaitingCommand: null,
   awaitingPrompt: null,
@@ -113,6 +117,8 @@ const classifyAction = (assistantText: string): string => {
   if (text.includes("review") || text.includes("approve")) return "review";
   if (text.includes("implement") || text.includes("in_progress"))
     return "implementation";
+  if (text.includes("validate-prd") || text.includes("requirements trace"))
+    return "requirements-validation";
   if (
     text.includes("epic") ||
     text.includes("create-story") ||
@@ -249,37 +255,45 @@ const workflowPrompt = (
             extra:
               "Use strict priority: reviews first, then ready issues, then epic maintenance workflows. Execute exactly one action, then stop and return.",
           }
-        : command === "/bmad:bmm:create-architecture"
+        : command === "/bmad:td:validate-prd"
           ? {
-              yaml: "_bmad/bmm/workflows/3-solutioning/create-architecture/workflow.md",
+              yaml: "_bmad/td-integration/workflows/validate-prd/workflow.yaml",
               instructions:
-                "_bmad/bmm/workflows/3-solutioning/create-architecture/workflow.md",
+                "_bmad/td-integration/workflows/validate-prd/instructions.xml",
               extra:
-                "Execute create-architecture from workflow files directly even if slash aliases are unavailable.",
+                "Trace completed delivery against PRD requirements, create td tasks for actionable gaps, and stop after reporting coverage.",
             }
-          : command === "/bmad:bmm:create-epics-and-stories"
+          : command === "/bmad:bmm:create-architecture"
             ? {
-                yaml: "_bmad/bmm/workflows/3-solutioning/create-epics-and-stories/workflow.md",
+                yaml: "_bmad/bmm/workflows/3-solutioning/create-architecture/workflow.md",
                 instructions:
-                  "_bmad/bmm/workflows/3-solutioning/create-epics-and-stories/workflow.md",
+                  "_bmad/bmm/workflows/3-solutioning/create-architecture/workflow.md",
                 extra:
-                  "Execute create-epics-and-stories from workflow files directly even if slash aliases are unavailable.",
+                  "Execute create-architecture from workflow files directly even if slash aliases are unavailable.",
               }
-            : command === "/bmad:bmm:create-story"
+            : command === "/bmad:bmm:create-epics-and-stories"
               ? {
-                  yaml: "_bmad/bmm/workflows/4-implementation/create-story/workflow.yaml",
+                  yaml: "_bmad/bmm/workflows/3-solutioning/create-epics-and-stories/workflow.md",
                   instructions:
-                    "_bmad/bmm/workflows/4-implementation/create-story/instructions.xml",
+                    "_bmad/bmm/workflows/3-solutioning/create-epics-and-stories/workflow.md",
                   extra:
-                    "Execute create-story from workflow files directly and report the selected story.",
+                    "Execute create-epics-and-stories from workflow files directly even if slash aliases are unavailable.",
                 }
-              : {
-                  yaml: "_bmad/bmm/workflows/4-implementation/code-review/workflow.yaml",
-                  instructions:
-                    "_bmad/bmm/workflows/4-implementation/code-review/instructions.xml",
-                  extra:
-                    "Execute code-review from workflow files directly and report findings and decision.",
-                };
+              : command === "/bmad:bmm:create-story"
+                ? {
+                    yaml: "_bmad/bmm/workflows/4-implementation/create-story/workflow.yaml",
+                    instructions:
+                      "_bmad/bmm/workflows/4-implementation/create-story/instructions.xml",
+                    extra:
+                      "Execute create-story from workflow files directly and report the selected story.",
+                  }
+                : {
+                    yaml: "_bmad/bmm/workflows/4-implementation/code-review/workflow.yaml",
+                    instructions:
+                      "_bmad/bmm/workflows/4-implementation/code-review/instructions.xml",
+                    extra:
+                      "Execute code-review from workflow files directly and report findings and decision.",
+                  };
 
   const executionRequirements = [
     "- Follow workflow instructions directly and perform actions, not just explain them.",
@@ -305,6 +319,30 @@ const workflowPrompt = (
     "Execution requirements:",
     ...executionRequirements,
   ].join("\n");
+};
+
+const matchesQueuedWorkflowPrompt = (
+  prompt: string,
+  awaitingPrompt: string | null,
+  awaitingCommand: string | null,
+): boolean => {
+  const actual = prompt.trim();
+  const expected = awaitingPrompt?.trim() ?? "";
+  const command = awaitingCommand?.trim() ?? "";
+
+  if (!actual) return false;
+  if (expected && actual === expected) return true;
+  if (command && actual === command) return true;
+
+  const workflowBanner = command ? `Execute BMAD workflow now: ${command}` : "";
+  if (workflowBanner && actual.includes(workflowBanner)) return true;
+
+  if (expected) {
+    const expectedFirstLine = expected.split("\n", 1)[0]?.trim() ?? "";
+    if (expectedFirstLine && actual.includes(expectedFirstLine)) return true;
+  }
+
+  return false;
 };
 
 export default function bmadAutopilot(pi: ExtensionAPI) {
@@ -334,6 +372,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       `Phase: ${state.phase}`,
       `Iteration: ${state.iteration}/${state.maxIterations}`,
       `Failures: ${state.failures}/${state.maxFailures}`,
+      `Queue drain passes: ${state.emptyQueuePasses}`,
       `Last command: ${state.lastCommand ?? "-"}`,
       `Last action: ${state.lastAction ?? "-"}`,
       `Last issue: ${state.lastIssueId ?? "-"}`,
@@ -546,7 +585,13 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
   pi.on("agent_start", async (event, ctx) => {
     currentPrompt = typeof event.prompt === "string" ? event.prompt.trim() : "";
     if (!state.active) return;
-    if (state.awaitingPrompt && currentPrompt === state.awaitingPrompt) {
+    if (
+      matchesQueuedWorkflowPrompt(
+        currentPrompt,
+        state.awaitingPrompt,
+        state.awaitingCommand,
+      )
+    ) {
       state.lastProgressAt = Date.now();
       updateUi(ctx);
     }
@@ -562,7 +607,14 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     )
       return;
     if (!state.awaitingCommand) return;
-    if (!state.awaitingPrompt || currentPrompt !== state.awaitingPrompt) return;
+    if (
+      !matchesQueuedWorkflowPrompt(
+        currentPrompt,
+        state.awaitingPrompt,
+        state.awaitingCommand,
+      )
+    )
+      return;
 
     const completedCommand = state.awaitingCommand;
 
@@ -617,6 +669,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     }
 
     if (completedCommand === INIT_COMMAND) {
+      state.emptyQueuePasses = 0;
       state.phase = "running";
       persistState("init-complete");
       if (ctx.hasUI) {
@@ -658,20 +711,41 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
 
     if (!workLeft) {
       if (hasInReview && state.freshSessionBetweenSteps) {
+        state.emptyQueuePasses = 0;
         persistState("loop-continue-in-review-session-hop");
         queueNextStepIteration(ctx);
         return;
       }
 
-      stopRun(
-        ctx,
-        "completed",
-        hasInReview
-          ? "Only in-review issues remain and session hopping is disabled."
-          : "No reviewable or ready issues remain.",
-      );
+      state.emptyQueuePasses += 1;
+
+      if (completedCommand === VALIDATE_PRD_COMMAND) {
+        stopRun(
+          ctx,
+          "completed",
+          hasInReview
+            ? "Only in-review issues remain after PRD validation and session hopping is disabled."
+            : "No reviewable, ready, epic-maintenance, or PRD gap work remains.",
+        );
+        return;
+      }
+
+      if (
+        state.emptyQueuePasses === 1 ||
+        (completedCommand === NEXT_STEP_COMMAND &&
+          state.lastAction === "epic-workflow")
+      ) {
+        persistState("loop-continue-drained-queue-sweep");
+        queueNextStepIteration(ctx);
+        return;
+      }
+
+      persistState("loop-run-validate-prd");
+      queueWorkflowCommand(ctx, VALIDATE_PRD_COMMAND);
       return;
     }
+
+    state.emptyQueuePasses = 0;
 
     persistState("loop-continue");
     queueNextStepIteration(ctx);
@@ -710,6 +784,11 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     "Run BMAD td next-step workflow",
   );
   registerWorkflowCommand(
+    "bmad:td:validate-prd",
+    "/bmad:td:validate-prd",
+    "Run BMAD td PRD validation workflow",
+  );
+  registerWorkflowCommand(
     "bmad-td-initialize",
     "/bmad:td:initialize",
     "Alias for /bmad:td:initialize",
@@ -718,6 +797,11 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     "bmad-td-next-step",
     "/bmad:td:next-step",
     "Alias for /bmad:td:next-step",
+  );
+  registerWorkflowCommand(
+    "bmad-td-validate-prd",
+    "/bmad:td:validate-prd",
+    "Alias for /bmad:td:validate-prd",
   );
   registerWorkflowCommand(
     "bmad:bmm:create-architecture",

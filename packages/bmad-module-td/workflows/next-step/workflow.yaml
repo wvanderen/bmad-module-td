@@ -1,5 +1,5 @@
 name: next-step
-description: "Analyze td and BMAD workspace state, determine the next action, and complete it. Handles reviews, implementations, and epic workflows automatically."
+description: "Analyze td and BMAD workspace state, determine the next action, and complete it. Handles reviews, implementations, epic workflows, and drained-queue PRD validation automatically."
 
 # Critical variables from config (inherited from core)
 user_name: "{config:user_name}"

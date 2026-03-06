@@ -24,6 +24,7 @@ Use td usage -q for subsequent reads.
 | initialize       | `/bmad:td:initialize`       | Accept-default onboarding for greenfield or brownfield projects       |
 | setup-validation | `/bmad:td:setup-validation` | Configure project validation methodology and quality gates            |
 | next-step        | `/bmad:td:next-step`        | Unified workflow: review, implement, or epic action based on priority |
+| validate-prd     | `/bmad:td:validate-prd`     | Validate completed delivery against the PRD and create td gap tasks   |
 
 **next-step Priority:**
 
@@ -32,6 +33,7 @@ The next-step workflow analyzes workspace state and executes the highest-priorit
 1. Reviews (highest)
 2. Implement ready issues
 3. Epic workflows (create-story for empty epics, code-review for completed epics)
+4. PRD validation when td execution is otherwise drained
 
 next-step runs from workflow instructions directly and does not require an external skill file.
 

@@ -1,17 +1,14 @@
-name: next-step
-description: "Analyze td and BMAD workspace state, determine the next action, and complete it. Handles reviews, implementations, epic workflows, and drained-queue PRD validation automatically."
+name: validate-prd
+description: "Validate completed delivery against PRD requirements, create td follow-up tasks for uncovered gaps, and report residual risk."
 
-# Critical variables from config (inherited from core)
 user_name: "{config:user_name}"
 communication_language: "{config:communication_language}"
 user_skill_level: "{config:user_skill_level}"
 document_output_language: "{config:document_output_language}"
 date: system-generated
 
-# Workflow components (relative paths from module root)
 instructions: "instructions.xml"
 
-# Tool and quality context
 td_ops: "tools/td-ops.xml"
 validation_methodology_file: "{config:validation_methodology_file}"
 project_context: "**/project-context.md"

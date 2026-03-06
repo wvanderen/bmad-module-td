@@ -40,6 +40,7 @@ npx bmad-method install --custom-content /path/to/repo/packages/bmad-module-td -
 | `/bmad:td:initialize`       | Accept-default onboarding for greenfield or brownfield projects; sets up BMAD artifacts and td dependency mapping |
 | `/bmad:td:setup-validation` | Configure project validation methodology used as a critical verification gate                                     |
 | `/bmad:td:next-step`        | Unified executor that analyzes workspace state and performs the highest-priority action                           |
+| `/bmad:td:validate-prd`     | Validate completed work against PRD requirements, create td follow-up gaps, and report residual risk              |
 
 ## next-step Priority
 
@@ -48,8 +49,17 @@ The `next-step` workflow uses this strict priority order:
 1. Reviews (highest)
 2. Implement ready issues
 3. Epic workflows (create-story for empty epics, code-review for completed epics)
+4. PRD validation when no reviewable, ready, or epic-maintenance work remains
 
 `next-step` runs entirely from its workflow instructions and does not depend on an external skill file.
+
+## Completion Validation
+
+When execution work is drained, run `/bmad:td:validate-prd` to compare delivered work against PRD requirements.
+
+- It traces PRD requirements against stories, td issues, and delivered evidence.
+- It creates new td tasks for missing or partial requirements instead of silently declaring completion.
+- If no actionable gaps remain, it reports completion with residual risk and recommended follow-up only when needed.
 
 ## Validation Methodology
 

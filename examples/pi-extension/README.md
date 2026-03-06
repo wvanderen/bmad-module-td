@@ -35,8 +35,10 @@ Then run `/reload` in Pi.
 
 - `/bmad:td:initialize` (extension wrapper)
 - `/bmad:td:next-step` (extension wrapper)
+- `/bmad:td:validate-prd` (extension wrapper)
 - `/bmad-td-initialize` (alias)
 - `/bmad-td-next-step` (alias)
+- `/bmad-td-validate-prd` (alias)
 - `/bmad-auto-start [--skip-init] [--max-iterations=N] [--max-failures=N] [--same-session]`
 - `/bmad-auto-status`
 - `/bmad-auto-pause`
@@ -73,7 +75,7 @@ Example:
 
 - Checkpoints are labeled in the session tree as `auto:<runId>:iter-<N>`.
 - `/bmad-auto-dive` can either navigate to a checkpoint or fork from it.
-- Otto stops when no reviewable/ready td issues remain, max iterations are hit, or failure budget is exhausted.
+- Otto sweeps drained queues for epic maintenance, then runs `/bmad:td:validate-prd` before stopping when no follow-up td work remains.
 - By default, Otto hops to a fresh session between `next-step` iterations. Use `--same-session` to disable.
 - If the runtime treats `/bmad-auto-continue` as plain text, Otto falls back to same-session compacted continuation for that cycle.
 - When only `in-review` issues remain, Otto continues with a session hop (default mode) to allow cross-session review separation.
