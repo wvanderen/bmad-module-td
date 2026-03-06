@@ -11,6 +11,7 @@ import {
   classifyAction,
   classifyOutcome,
   parseIssueId,
+  parseIssueTitle,
   resolveWorkflowResult,
   RESULT_PREFIX,
   shortText,
@@ -133,6 +134,7 @@ interface Checkpoint {
   entryId: string;
   command: string;
   issueId: string | null;
+  issueTitle: string | null;
   action: ActionKind | null;
   outcome: OutcomeKind | null;
   confidence: ConfidenceKind;
@@ -164,6 +166,7 @@ interface RunState {
   lastContinuation: ContinuityKind;
   lastContinuationReason: string | null;
   lastIssueId: string | null;
+  lastIssueTitle: string | null;
   lastError: string | null;
   lastProgressAt: number;
   stopReason: string | null;
@@ -197,6 +200,7 @@ const newRunState = (): RunState => ({
   lastContinuation: "none",
   lastContinuationReason: null,
   lastIssueId: null,
+  lastIssueTitle: null,
   lastError: null,
   lastProgressAt: Date.now(),
   stopReason: null,
@@ -215,10 +219,14 @@ const newWorkflowToken = (): string =>
   `otto-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 const checkpointLabel = (checkpoint: Checkpoint): string => {
+  const checkpointIssue = currentIssueLabel(
+    checkpoint.issueId,
+    checkpoint.issueTitle,
+  );
   const parts = [
     `#${checkpoint.iteration}`,
     new Date(checkpoint.timestamp).toLocaleTimeString(),
-    checkpoint.issueId ?? checkpoint.command,
+    checkpointIssue !== "-" ? checkpointIssue : checkpoint.command,
     checkpoint.action ?? checkpoint.command,
     checkpoint.confidence,
   ];
@@ -228,7 +236,7 @@ const checkpointLabel = (checkpoint: Checkpoint): string => {
     parts.push(checkpoint.continuity.replaceAll("-", " "));
   }
   if (checkpoint.alert) parts.push(checkpoint.alert);
-  return `${parts.join(" | ")} | ${checkpoint.summary}`;
+  return shortText(`${parts.join(" | ")} | ${checkpoint.summary}`, 140);
 };
 
 const continuityLabel = (
@@ -245,6 +253,42 @@ const continuityLabel = (
           : "none";
 
   return reason ? `${base} - ${reason}` : base;
+};
+
+const currentIssueLabel = (
+  issueId: string | null,
+  issueTitle: string | null,
+  maxLength = 80,
+): string => {
+  if (!issueId) return "-";
+  return issueTitle
+    ? shortText(`${issueId} - ${issueTitle}`, maxLength)
+    : issueId;
+};
+
+const statusLabel = (state: RunState, alert: string | null): string => {
+  if (!state.active) return `Otto: ${state.phase}`;
+
+  const segments = [
+    currentIssueLabel(state.lastIssueId, state.lastIssueTitle, 34),
+    state.lastAction ?? state.phase,
+    state.lastConfidence,
+  ];
+
+  if (alert) segments.push(shortText(alert, 18));
+  return shortText(`Otto: ${segments.join(" | ")}`, 60);
+};
+
+const widgetReasonLabel = (reason: string | null): string =>
+  reason ? shortText(reason, 96) : "-";
+
+const checkpointContextLabel = (checkpoint: Checkpoint): string => {
+  const issue = currentIssueLabel(
+    checkpoint.issueId,
+    checkpoint.issueTitle,
+    42,
+  );
+  return issue !== "-" ? issue : shortText(checkpoint.command, 42);
 };
 
 const stateAlert = (runState: RunState): string | null => {
@@ -270,11 +314,15 @@ const stateAlert = (runState: RunState): string | null => {
   return null;
 };
 
-const checkpointActionOptions = (checkpoint: Checkpoint): string[] => [
-  `Navigate here | ${checkpoint.issueId ?? checkpoint.command} | ${checkpoint.summary}`,
-  `Fork from here | ${checkpoint.issueId ?? checkpoint.command} | ${checkpoint.summary}`,
-  `Show details | ${checkpoint.action ?? checkpoint.command} | ${checkpoint.confidence}`,
-];
+const checkpointActionOptions = (checkpoint: Checkpoint): string[] => {
+  const context = checkpointContextLabel(checkpoint);
+  const summary = shortText(checkpoint.summary, 56);
+  return [
+    `Navigate here | ${context} | ${summary}`,
+    `Fork from here | ${context} | ${summary}`,
+    `Show details | ${checkpoint.action ?? checkpoint.command} | ${checkpoint.confidence}`,
+  ];
+};
 
 const extractAssistantText = (messages: unknown[]): string => {
   if (!Array.isArray(messages)) return "";
@@ -753,7 +801,7 @@ const workflowPrompt = (
     `- ${workflow.extra}`,
     `- Workflow token: ${token}. Carry it through this run and include it unchanged in the final OTTO_RESULT JSON as key token.`,
     "- Report concrete actions taken, artifacts touched, and td outcomes.",
-    `- End your final response with exactly one line starting with ${RESULT_PREFIX} followed by valid single-line JSON with keys: command, token, action, issueId, outcome, confidence, summary.`,
+    `- End your final response with exactly one line starting with ${RESULT_PREFIX} followed by valid single-line JSON with keys: command, token, action, issueId, issueTitle, outcome, confidence, summary. Use null for issueTitle when no td title applies.`,
     "- Use action from: review, implementation, requirements-validation, epic-workflow, unknown.",
     "- Use outcome from: completed, blocked, needs-input, no-work, failed, unknown.",
     "- Use confidence from: high, medium, low, unknown.",
@@ -821,18 +869,21 @@ export default function otto(pi: ExtensionAPI) {
     if (!ctx.hasUI) return;
 
     const alert = stateAlert(state);
+    const currentIssue = currentIssueLabel(
+      state.lastIssueId,
+      state.lastIssueTitle,
+    );
 
-    const status = state.active
-      ? `Otto: ${state.lastIssueId ?? state.lastAction ?? state.phase} | ${state.phase} | ${state.lastConfidence}${alert ? ` | ${alert}` : ""}`
-      : `Otto: ${state.phase}`;
+    const status = statusLabel(state, alert);
 
     ctx.ui.setStatus("otto", status);
 
     const widgetLines = [
+      `Status: ${state.phase} | ${state.lastAction ?? "-"} | ${state.lastConfidence}`,
       `Run: ${state.runId ?? "none"}`,
-      `Current td: ${state.lastIssueId ?? "-"}`,
-      `Branch: ${state.lastAction ?? "-"}`,
-      `Why: ${state.lastDecisionReason ?? "-"}`,
+      `Current td: ${currentIssue}`,
+      `Action: ${state.lastAction ?? "-"}`,
+      `Why: ${widgetReasonLabel(state.lastDecisionReason)}`,
       `Mode: ${state.lastCommandMode}`,
       `Confidence: ${state.lastConfidence}`,
       `Continuity: ${continuityLabel(state.lastContinuation, state.lastContinuationReason)}`,
@@ -1164,13 +1215,17 @@ export default function otto(pi: ExtensionAPI) {
     const summary = resolvedWorkflowResult.summary;
     const entryId = ctx.sessionManager.getLeafId();
     const alert = stateAlert(state);
+    const issueId = workflowResult?.issueId ?? parseIssueId(assistantText);
+    const issueTitle =
+      workflowResult?.issueTitle ?? parseIssueTitle(assistantText, issueId);
 
     if (entryId) {
       state.checkpoints.push({
         iteration: state.iteration,
         entryId,
         command: completedCommand,
-        issueId: workflowResult?.issueId ?? parseIssueId(assistantText),
+        issueId,
+        issueTitle,
         action: workflowResult?.action ?? classifyAction(assistantText),
         outcome: workflowResult?.outcome ?? classifyOutcome(assistantText),
         confidence: workflowResult?.confidence ?? "unknown",
@@ -1193,10 +1248,10 @@ export default function otto(pi: ExtensionAPI) {
       );
     }
 
-    state.lastIssueId =
-      workflowResult?.issueId ??
-      parseIssueId(assistantText) ??
-      state.lastIssueId;
+    const previousIssueId = state.lastIssueId;
+    state.lastIssueId = issueId ?? state.lastIssueId;
+    state.lastIssueTitle =
+      issueTitle ?? (issueId === previousIssueId ? state.lastIssueTitle : null);
     state.lastAction = workflowResult?.action ?? classifyAction(assistantText);
     state.lastOutcome =
       workflowResult?.outcome ?? classifyOutcome(assistantText);
@@ -1561,9 +1616,9 @@ export default function otto(pi: ExtensionAPI) {
     const status = [
       `Run: ${state.runId ?? "none"}`,
       `Preferences: ${loadedPreferences.source ?? "built-in defaults"}`,
-      `Current td: ${state.lastIssueId ?? "-"}`,
-      `Branch: ${state.lastAction ?? "-"}`,
-      `Why: ${state.lastDecisionReason ?? "-"}`,
+      `Current td: ${currentIssueLabel(state.lastIssueId, state.lastIssueTitle)}`,
+      `Action: ${state.lastAction ?? "-"}`,
+      `Why: ${widgetReasonLabel(state.lastDecisionReason)}`,
       `Mode: ${state.lastCommandMode}`,
       `Phase: ${state.phase}`,
       `Active: ${state.active ? "yes" : "no"}`,
@@ -1705,15 +1760,15 @@ export default function otto(pi: ExtensionAPI) {
         [
           `Checkpoint: #${checkpoint.iteration}`,
           `Time: ${new Date(checkpoint.timestamp).toLocaleString()}`,
-          `td: ${checkpoint.issueId ?? "-"}`,
+          `td: ${currentIssueLabel(checkpoint.issueId, checkpoint.issueTitle)}`,
           `Command: ${checkpoint.command}`,
-          `Branch: ${checkpoint.action ?? "-"}`,
+          `Action: ${checkpoint.action ?? "-"}`,
           `Outcome: ${checkpoint.outcome ?? "-"}`,
           `Confidence: ${checkpoint.confidence}`,
           `Continuity: ${continuityLabel(checkpoint.continuity, checkpoint.continuityReason)}`,
           `Queue state: ${checkpoint.queueState}`,
           `Alert: ${checkpoint.alert ?? "-"}`,
-          `Why: ${checkpoint.reason ?? "-"}`,
+          `Why: ${widgetReasonLabel(checkpoint.reason)}`,
           `Summary: ${checkpoint.summary}`,
         ].join("\n"),
         "info",

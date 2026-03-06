@@ -59,6 +59,27 @@ export const parseIssueId = (text) => {
   return match ? match[0] : null;
 };
 
+export const parseIssueTitle = (text, issueId = parseIssueId(text)) => {
+  if (!issueId) return null;
+
+  const escapedIssueId = issueId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const patterns = [
+    new RegExp(
+      `\\b${escapedIssueId}\\b\\s*[\\u2014\\u2013:-]\\s*([^\\n.]+)`,
+      "i",
+    ),
+    new RegExp(`\\b${escapedIssueId}\\b\\s+[\"']([^\"']+)[\"']`, "i"),
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    const candidate = match?.[1]?.trim();
+    if (candidate) return shortText(candidate, 120);
+  }
+
+  return null;
+};
+
 export const parseWorkflowResult = (assistantText) => {
   const matches = [
     ...assistantText.matchAll(
@@ -106,6 +127,11 @@ export const parseWorkflowResult = (assistantText) => {
       /\btd-[a-z0-9]+\b/i.test(parsed.issueId)
         ? (parsed.issueId.match(/\btd-[a-z0-9]+\b/i)?.[0] ?? null)
         : null;
+    const issueTitle =
+      typeof parsed.issueTitle === "string" &&
+      parsed.issueTitle.trim().length > 0
+        ? shortText(parsed.issueTitle, 120)
+        : null;
     const token =
       typeof parsed.token === "string" && parsed.token.trim().length > 0
         ? parsed.token.trim()
@@ -119,6 +145,7 @@ export const parseWorkflowResult = (assistantText) => {
               token,
               action,
               issueId,
+              issueTitle,
               outcome,
               confidence,
               summary,

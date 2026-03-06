@@ -4,14 +4,15 @@ import {
   classifyAction,
   classifyOutcome,
   parseIssueId,
+  parseIssueTitle,
   parseWorkflowResult,
   resolveWorkflowResult,
   shortText,
 } from "../examples/pi-extension/otto-result.mjs";
 
 const validText = [
-  "Completed td-123abc and queued review.",
-  'OTTO_RESULT {"command":"/bmad:td:next-step","token":"otto-test-token","action":"review","issueId":"td-123abc","outcome":"completed","confidence":"high","summary":"Completed td-123abc and queued review."}',
+  "Completed td-123abc - Current td UI should include title and queued review.",
+  'OTTO_RESULT {"command":"/bmad:td:next-step","token":"otto-test-token","action":"review","issueId":"td-123abc","issueTitle":"Current td UI should include title","outcome":"completed","confidence":"high","summary":"Completed td-123abc and queued review."}',
 ].join("\n");
 
 const validParsed = parseWorkflowResult(validText);
@@ -21,6 +22,7 @@ assert.deepEqual(validParsed.result, {
   token: "otto-test-token",
   action: "review",
   issueId: "td-123abc",
+  issueTitle: "Current td UI should include title",
   outcome: "completed",
   confidence: "high",
   summary: "Completed td-123abc and queued review.",
@@ -71,6 +73,10 @@ assert.equal(classifyOutcome("No open issues remain."), "no-work");
 assert.equal(classifyOutcome("The workflow failed to continue."), "failed");
 assert.equal(parseIssueId("Focus td-abc123 then continue."), "td-abc123");
 assert.equal(parseIssueId("No issue present."), null);
+assert.equal(
+  parseIssueTitle("Focus td-abc123 - Current td UI should include title next."),
+  "Current td UI should include title next",
+);
 assert.equal(shortText("  hello   world  "), "hello world");
 
 console.log("Otto result contract checks passed.");
