@@ -43,6 +43,14 @@ Validation methodology is a critical review control.
 - next-step must use it for review and implementation verification
 - If it is missing, next-step must run fallback checks and flag reduced confidence
 
+**Git Commit Standards:**
+
+- Create the git commit before `td review`.
+- Use lowercase conventional types: `feat`, `fix`, `refactor`, `docs`, `test`, or `chore`.
+- Keep the subject in imperative mood, lowercase after the colon, with no trailing period.
+- Normalize the subject by trimming whitespace, collapsing duplicate spaces, and removing trailing punctuation.
+- Keep the body field order stable: `Task`, `Story`, `td`, implementation bullets, `Tests`, `Refs`.
+
 **Commit Message Format:**
 
 ```

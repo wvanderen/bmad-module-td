@@ -84,7 +84,15 @@ Validation evidence should stay machine-checkable across implementations and rev
 - Web UI work: include screenshot paths or URLs and visual check outputs.
 - CLI/TUI work: include representative command transcripts, terminal captures, or equivalent runtime evidence.
 
-## Commit Message Format
+## Git Commit Standards
+
+- Create the git commit before `td review`.
+- Use lowercase conventional types: `feat`, `fix`, `refactor`, `docs`, `test`, or `chore`.
+- Keep the subject in imperative mood, lowercase after the colon, with no trailing period.
+- Normalize the subject by trimming whitespace, collapsing duplicate spaces, and removing trailing punctuation.
+- Keep the body field order stable: `Task`, `Story`, `td`, implementation bullets, `Tests`, `Refs`.
+
+### Commit Message Format
 
 ```
 feat(story-X.Y): brief description

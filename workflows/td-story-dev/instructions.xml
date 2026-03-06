@@ -192,7 +192,14 @@
     
     <action>Stage all changed files: `git add .`</action>
     
-    <action>Craft excellent commit message following this format:</action>
+    <action>Craft excellent commit message following this format.</action>
+    <action>Normalize the message before commit:
+      - Select a lowercase conventional type: feat/fix/refactor/docs/test/chore.
+      - Use `story-X.Y` as the scope when story context exists.
+      - Rewrite the subject as an imperative phrase in lowercase after the colon.
+      - Trim leading/trailing whitespace, collapse duplicate spaces, and remove trailing punctuation from the subject.
+      - Keep the body field order stable: Task, Story, td, implementation bullets, Tests, Refs.
+    </action>
     
     <example>
 feat(story-1.2): implement user authentication middleware
@@ -213,12 +220,13 @@ Tests:
 Refs: {td_issue_id}
     </example>
     
-    <action>Commit message MUST include:
-      - Type prefix (feat/fix/refactor/test/docs)
+      <action>Commit message MUST include:
+      - Lowercase type prefix (feat/fix/refactor/docs/test/chore)
       - Story reference in scope
-      - Brief description
+      - Normalized imperative subject
       - Task details in body
       - td issue reference
+      - Stable body field order
       - Test summary
       - `Refs: {td_issue_id}` footer
     </action>

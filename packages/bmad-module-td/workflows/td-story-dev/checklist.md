@@ -1,12 +1,14 @@
 # td-story-dev Workflow Checklist
 
 ## Ralph Wiggum Loop Rules
+
 - [ ] ONE task per session - no exceptions
 - [ ] Do not implement multiple tasks
 - [ ] Do not skip ahead to future tasks
 - [ ] Stop after this task is complete
 
 ## Pre-Implementation
+
 - [ ] td session initialized (`td usage --new-session`)
 - [ ] Next task identified from td
 - [ ] Story file loaded
@@ -15,6 +17,7 @@
 - [ ] Dev notes reviewed
 
 ## Implementation
+
 - [ ] Tests written FIRST (red phase)
 - [ ] Tests confirmed failing before implementation
 - [ ] Minimal implementation (green phase)
@@ -24,6 +27,7 @@
 - [ ] Architecture patterns followed
 
 ## Story File Updates
+
 - [ ] Task checkbox marked [x]
 - [ ] Subtasks marked [x] (if any)
 - [ ] File List updated
@@ -31,22 +35,26 @@
 - [ ] td Sync Log updated
 
 ## Git Commit (CRITICAL!)
+
 - [ ] All changes staged
 - [ ] Commit message includes:
-  - [ ] Type prefix (feat/fix/refactor)
+  - [ ] Lowercase type prefix (feat/fix/refactor/docs/test/chore)
   - [ ] Story reference in scope
-  - [ ] Brief description
+  - [ ] Normalized imperative subject
   - [ ] Task details in body
+  - [ ] Stable body field order (`Task`, `Story`, `td`, bullets, `Tests`, `Refs`)
   - [ ] Test summary
   - [ ] `Refs: {td_issue_id}` footer
 - [ ] Commit successful
 
 ## td Workflow
+
 - [ ] td handoff created with details
 - [ ] td review submitted
 - [ ] Commit hash included in review
 
 ## Quality Gates
+
 - [ ] Implementation matches task requirements
 - [ ] Related acceptance criteria satisfied
 - [ ] Tests exist and pass 100%
