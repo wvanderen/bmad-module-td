@@ -1,1 +1,1 @@
-export { default } from "../../../examples/pi-extension/bmad-autopilot";
+export { default } from "./bmad-autopilot";

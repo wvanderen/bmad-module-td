@@ -25,6 +25,8 @@
     "src"
   ],
   "scripts": {
+    "sync:source": "node ../../scripts/sync-pi-autopilot.mjs",
+    "prepack": "npm run sync:source",
     "pack": "npm pack",
     "release": "npm run release:patch",
     "release:major": "npm version major",

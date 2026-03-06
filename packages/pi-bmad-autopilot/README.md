@@ -6,7 +6,7 @@ Current source of truth:
 
 - `examples/pi-extension/bmad-autopilot.ts`
 
-The package entrypoint re-exports that file for monorepo development.
+`npm pack`/`npm publish` sync that file into `packages/pi-bmad-autopilot/src/bmad-autopilot.ts` so published installs ship the actual extension source.
 
 Autopilot also supports optional JSON preferences from `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, or `BMAD_AUTOPILOT_CONFIG`. Use `workflows.commandModes` to opt workflows like `/bmad:bmm:create-architecture` into `party` mode.
 
