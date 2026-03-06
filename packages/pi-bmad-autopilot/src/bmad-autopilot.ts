@@ -7,13 +7,20 @@ import type {
   ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
 
+import {
+  classifyAction,
+  classifyOutcome,
+  parseIssueId,
+  resolveWorkflowResult,
+  RESULT_PREFIX,
+  shortText,
+} from "./otto-result.mjs";
+
 const INIT_COMMAND = "/bmad:td:initialize";
 const NEXT_STEP_COMMAND = "/bmad:td:next-step";
 const VALIDATE_PRD_COMMAND = "/bmad:td:validate-prd";
 const CONTINUE_COMMAND = "/bmad-auto-continue";
 const STATE_ENTRY_TYPE = "bmad-autopilot-state";
-const RESULT_PREFIX = "OTTO_RESULT";
-
 type WorkflowCommand =
   | "/bmad:td:initialize"
   | "/bmad:td:next-step"
@@ -74,6 +81,25 @@ type Phase =
   | "stopped"
   | "completed"
   | "error";
+type StopCode =
+  | "none"
+  | "manual-stop"
+  | "paused-for-input"
+  | "blocked-workflow"
+  | "session-rotation-cancelled"
+  | "failure-budget-reached"
+  | "max-iterations-reached"
+  | "queue-drained"
+  | "queue-drained-in-review-only"
+  | "validate-prd-finished"
+  | "validate-prd-in-review-only";
+type QueueState =
+  | "unknown"
+  | "ready"
+  | "in-review-only"
+  | "drained-first-pass"
+  | "drained-ready-for-validation"
+  | "drained-final";
 
 interface Checkpoint {
   iteration: number;
@@ -101,6 +127,8 @@ interface RunState {
   lastError: string | null;
   lastProgressAt: number;
   stopReason: string | null;
+  stopCode: StopCode;
+  queueState: QueueState;
   emptyQueuePasses: number;
   checkpoints: Checkpoint[];
   awaitingCommand: string | null;
@@ -126,63 +154,14 @@ const newRunState = (): RunState => ({
   lastError: null,
   lastProgressAt: Date.now(),
   stopReason: null,
+  stopCode: "none",
+  queueState: "unknown",
   emptyQueuePasses: 0,
   checkpoints: [],
   awaitingCommand: null,
   awaitingPrompt: null,
   freshSessionBetweenSteps: true,
 });
-
-const shortText = (text: string, max = 120): string => {
-  const squashed = text.replace(/\s+/g, " ").trim();
-  if (squashed.length <= max) return squashed;
-  return `${squashed.slice(0, max - 3)}...`;
-};
-
-const classifyAction = (assistantText: string): ActionKind => {
-  const text = assistantText.toLowerCase();
-  if (text.includes("review") || text.includes("approve")) return "review";
-  if (text.includes("implement") || text.includes("in_progress"))
-    return "implementation";
-  if (text.includes("validate-prd") || text.includes("requirements trace"))
-    return "requirements-validation";
-  if (
-    text.includes("epic") ||
-    text.includes("create-story") ||
-    text.includes("code-review")
-  )
-    return "epic-workflow";
-  return "unknown";
-};
-
-const classifyOutcome = (assistantText: string): OutcomeKind => {
-  const text = assistantText.toLowerCase();
-  if (
-    text.includes("no reviewable") ||
-    text.includes("no ready") ||
-    text.includes("no open issues") ||
-    text.includes("no follow-up td work remains")
-  ) {
-    return "no-work";
-  }
-  if (
-    text.includes("blocked") ||
-    text.includes("waiting on") ||
-    text.includes("unable to")
-  ) {
-    return "blocked";
-  }
-  if (
-    text.includes("ask one targeted question") ||
-    text.includes("need your direction") ||
-    text.includes("wait for user direction")
-  ) {
-    return "needs-input";
-  }
-  if (text.includes("error") || text.includes("failed")) return "failed";
-  if (text.length > 0) return "completed";
-  return "unknown";
-};
 
 const extractAssistantText = (messages: unknown[]): string => {
   if (!Array.isArray(messages)) return "";
@@ -204,135 +183,6 @@ const extractAssistantText = (messages: unknown[]): string => {
     .map((part) => part.text as string);
 
   return lines.join("\n").trim();
-};
-
-const parseIssueId = (text: string): string | null => {
-  const match = text.match(/\btd-[a-z0-9]+\b/i);
-  return match ? match[0] : null;
-};
-
-interface WorkflowResult {
-  command: string;
-  action: ActionKind;
-  issueId: string | null;
-  outcome: OutcomeKind;
-  confidence: ConfidenceKind;
-  summary: string;
-}
-
-const parseWorkflowResult = (
-  assistantText: string,
-): { result: WorkflowResult | null; malformed: boolean } => {
-  const matches = [
-    ...assistantText.matchAll(
-      new RegExp(`^${RESULT_PREFIX}\\s+(\\{.*\\})$`, "gm"),
-    ),
-  ];
-  if (matches.length === 0) return { result: null, malformed: false };
-
-  const payload = matches[matches.length - 1]?.[1];
-  if (!payload) return { result: null, malformed: true };
-
-  try {
-    const parsed = JSON.parse(payload) as Partial<WorkflowResult>;
-    if (!parsed || typeof parsed !== "object") {
-      return { result: null, malformed: true };
-    }
-
-    const action =
-      parsed.action === "review" ||
-      parsed.action === "implementation" ||
-      parsed.action === "requirements-validation" ||
-      parsed.action === "epic-workflow"
-        ? parsed.action
-        : "unknown";
-    const outcome =
-      parsed.outcome === "completed" ||
-      parsed.outcome === "blocked" ||
-      parsed.outcome === "needs-input" ||
-      parsed.outcome === "no-work" ||
-      parsed.outcome === "failed"
-        ? parsed.outcome
-        : "unknown";
-    const confidence =
-      parsed.confidence === "high" ||
-      parsed.confidence === "medium" ||
-      parsed.confidence === "low"
-        ? parsed.confidence
-        : "unknown";
-    const summary =
-      typeof parsed.summary === "string" && parsed.summary.trim().length > 0
-        ? shortText(parsed.summary, 160)
-        : "No structured summary.";
-    const issueId =
-      typeof parsed.issueId === "string" &&
-      /\btd-[a-z0-9]+\b/i.test(parsed.issueId)
-        ? (parsed.issueId.match(/\btd-[a-z0-9]+\b/i)?.[0] ?? null)
-        : null;
-
-    return {
-      result:
-        typeof parsed.command === "string" && parsed.command.trim().length > 0
-          ? {
-              command: parsed.command,
-              action,
-              issueId,
-              outcome,
-              confidence,
-              summary,
-            }
-          : null,
-      malformed: false,
-    };
-  } catch {
-    return { result: null, malformed: true };
-  }
-};
-
-const resolveWorkflowResult = (
-  assistantText: string,
-  completedCommand: string,
-): {
-  result: WorkflowResult | null;
-  resultSource: ResultSourceKind;
-  error: string | null;
-  summary: string;
-} => {
-  const parsedWorkflowResult = parseWorkflowResult(assistantText);
-
-  if (parsedWorkflowResult.malformed) {
-    return {
-      result: null,
-      resultSource: "malformed",
-      error: "Malformed OTTO_RESULT payload.",
-      summary: shortText(assistantText || "No assistant summary."),
-    };
-  }
-
-  if (parsedWorkflowResult.result) {
-    if (parsedWorkflowResult.result.command !== completedCommand) {
-      return {
-        result: null,
-        resultSource: "mismatched",
-        error: `OTTO_RESULT command mismatch: expected ${completedCommand}, got ${parsedWorkflowResult.result.command}.`,
-        summary: parsedWorkflowResult.result.summary,
-      };
-    }
-
-    return {
-      result: parsedWorkflowResult.result,
-      resultSource: "structured",
-      error: null,
-      summary: parsedWorkflowResult.result.summary,
-    };
-  }
-
-  return {
-    result: null,
-    resultSource: "heuristic",
-    error: null,
-    summary: shortText(assistantText || "No assistant summary."),
-  };
 };
 
 const parseStartArgs = (
@@ -563,6 +413,8 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       `Confidence: ${state.lastConfidence}`,
       `Last issue: ${state.lastIssueId ?? "-"}`,
       `Result source: ${state.lastResultSource ?? "-"}`,
+      `Queue state: ${state.queueState}`,
+      `Stop code: ${state.stopCode}`,
       `Session hop: ${state.freshSessionBetweenSteps ? "on" : "off"}`,
     ];
 
@@ -611,49 +463,9 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
   };
 
   const continueWithFreshSession = (ctx: ExtensionContext): void => {
-    const maybeNewSession = (
-      ctx as unknown as {
-        newSession?: () => Promise<{ cancelled?: boolean }>;
-      }
-    ).newSession;
-
-    if (typeof maybeNewSession === "function") {
-      state.awaitingCommand = null;
-      state.awaitingPrompt = null;
-      persistState("direct-session-hop-attempt");
-      updateUi(ctx);
-
-      void maybeNewSession
-        .call(ctx)
-        .then((result) => {
-          if (!state.active || state.phase !== "running") return;
-          if (result?.cancelled) {
-            stopRun(ctx, "error", "Session rotation cancelled.");
-            return;
-          }
-          persistState("session-rotated-direct");
-          updateUi(ctx);
-          queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
-        })
-        .catch(() => {
-          if (!state.active || state.phase !== "running") return;
-          state.awaitingCommand = CONTINUE_COMMAND;
-          state.awaitingPrompt = CONTINUE_COMMAND;
-          persistState("queue-session-hop-fallback-command");
-          updateUi(ctx);
-
-          const options = ctx.isIdle()
-            ? undefined
-            : { deliverAs: "followUp" as const };
-          pi.sendUserMessage(CONTINUE_COMMAND, options);
-        });
-
-      return;
-    }
-
     state.awaitingCommand = CONTINUE_COMMAND;
     state.awaitingPrompt = CONTINUE_COMMAND;
-    persistState("queue-session-hop");
+    persistState("queue-session-hop-command");
     updateUi(ctx);
 
     const options = ctx.isIdle()
@@ -711,10 +523,12 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     ctx: ExtensionContext,
     phase: Phase,
     reason: string,
+    stopCode: StopCode,
   ): void => {
     state.active = false;
     state.phase = phase;
     state.stopReason = reason;
+    state.stopCode = stopCode;
     state.awaitingCommand = null;
     state.awaitingPrompt = null;
     state.lastProgressAt = Date.now();
@@ -742,6 +556,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         ctx,
         phase,
         `${message} Failure budget reached (${state.failures}/${state.maxFailures}).`,
+        "failure-budget-reached",
       );
       return true;
     }
@@ -902,6 +717,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         ctx,
         "paused",
         `Workflow requested user input for ${completedCommand}.`,
+        "paused-for-input",
       );
       return;
     }
@@ -911,14 +727,17 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         ctx,
         "paused",
         `Workflow reported blocked state for ${completedCommand}.`,
+        "blocked-workflow",
       );
       return;
     }
 
     if (completedCommand === INIT_COMMAND) {
       state.emptyQueuePasses = 0;
+      state.queueState = "ready";
       state.phase = "running";
       state.lastError = null;
+      state.stopCode = "none";
       persistState("init-complete");
       if (ctx.hasUI) {
         ctx.ui.notify(
@@ -936,6 +755,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         ctx,
         "completed",
         `Reached max iterations (${state.maxIterations}).`,
+        "max-iterations-reached",
       );
       return;
     }
@@ -946,6 +766,13 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       const workState = await hasRemainingWork();
       workLeft = workState.hasImmediateWork;
       hasInReview = workState.hasInReview;
+      state.queueState = workLeft
+        ? "ready"
+        : hasInReview
+          ? "in-review-only"
+          : state.emptyQueuePasses >= 1
+            ? "drained-ready-for-validation"
+            : "drained-first-pass";
       state.lastError = null;
     } catch (error) {
       const message =
@@ -957,6 +784,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     if (!workLeft) {
       if (hasInReview && state.freshSessionBetweenSteps) {
         state.emptyQueuePasses = 0;
+        state.queueState = "in-review-only";
         persistState("loop-continue-in-review-session-hop");
         queueNextStepIteration(ctx);
         return;
@@ -965,12 +793,14 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       state.emptyQueuePasses += 1;
 
       if (completedCommand === VALIDATE_PRD_COMMAND) {
+        state.queueState = hasInReview ? "in-review-only" : "drained-final";
         stopRun(
           ctx,
           "completed",
           hasInReview
             ? "Only in-review issues remain after PRD validation and session hopping is disabled."
             : "No reviewable, ready, epic-maintenance, or PRD gap work remains.",
+          hasInReview ? "validate-prd-in-review-only" : "validate-prd-finished",
         );
         return;
       }
@@ -980,17 +810,20 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         (completedCommand === NEXT_STEP_COMMAND &&
           state.lastAction === "epic-workflow")
       ) {
+        state.queueState = "drained-first-pass";
         persistState("loop-continue-drained-queue-sweep");
         queueNextStepIteration(ctx);
         return;
       }
 
+      state.queueState = "drained-ready-for-validation";
       persistState("loop-run-validate-prd");
       queueWorkflowCommand(ctx, VALIDATE_PRD_COMMAND);
       return;
     }
 
     state.emptyQueuePasses = 0;
+    state.queueState = "ready";
 
     persistState("loop-continue");
     queueNextStepIteration(ctx);
@@ -1008,7 +841,12 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
 
       const result = await ctx.newSession();
       if (result.cancelled) {
-        stopRun(ctx, "error", "Session rotation cancelled.");
+        stopRun(
+          ctx,
+          "error",
+          "Session rotation cancelled.",
+          "session-rotation-cancelled",
+        );
         return;
       }
 
@@ -1123,6 +961,8 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         lastProgressAt: now,
         awaitingCommand: initialCommand,
         awaitingPrompt: null,
+        stopCode: "none",
+        queueState: skipInit ? "ready" : "unknown",
       };
 
       persistState("start");
@@ -1150,7 +990,14 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         `Iteration: ${state.iteration}/${state.maxIterations}`,
         `Failures: ${state.failures}/${state.maxFailures}`,
         `Last command: ${state.lastCommand ?? "-"}`,
+        `Last action: ${state.lastAction ?? "-"}`,
+        `Last outcome: ${state.lastOutcome ?? "-"}`,
+        `Confidence: ${state.lastConfidence}`,
+        `Result source: ${state.lastResultSource ?? "-"}`,
         `Last issue: ${state.lastIssueId ?? "-"}`,
+        `Queue state: ${state.queueState}`,
+        `Stop code: ${state.stopCode}`,
+        `Stop reason: ${state.stopReason ?? "-"}`,
       ].join("\n");
 
       ctx.ui.notify(status, "info");
@@ -1182,6 +1029,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
 
       state.phase = "running";
       state.stopReason = null;
+      state.stopCode = "none";
       state.awaitingCommand = NEXT_STEP_COMMAND;
       state.awaitingPrompt = null;
       persistState("resume");
@@ -1200,7 +1048,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         return;
       }
       const reason = args.trim() || "Stopped manually.";
-      stopRun(ctx, "stopped", reason);
+      stopRun(ctx, "stopped", reason, "manual-stop");
     },
   });
 

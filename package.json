@@ -18,6 +18,7 @@
   "author": "BMad Method",
   "private": true,
   "scripts": {
+    "check:otto-result": "node scripts/check-otto-result-contract.mjs",
     "score:dry-run": "node scripts/score-dry-run.mjs",
     "score:otto-run": "node scripts/score-otto-run.mjs",
     "sync:module": "node scripts/sync-td-integration.mjs --source-dir packages/bmad-module-td",
@@ -52,7 +53,7 @@
     "release:autopilot:major:publish": "npm run release:autopilot:major && npm run publish:autopilot",
     "release:autopilot:prerelease:publish": "npm run release:autopilot:prerelease && npm run publish:autopilot",
     "release:check": "npm run sync:check && npm run publish:module:check && npm run publish:autopilot:check",
-    "test": "npm run sync:check && npm run lint && npm run format:check"
+    "test": "npm run sync:check && npm run check:otto-result && npm run lint && npm run format:check"
   },
   "workspaces": [
     "packages/*"

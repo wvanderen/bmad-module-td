@@ -1,0 +1,66 @@
+import assert from "node:assert/strict";
+
+import {
+  classifyAction,
+  classifyOutcome,
+  parseIssueId,
+  parseWorkflowResult,
+  resolveWorkflowResult,
+  shortText,
+} from "../examples/pi-extension/otto-result.mjs";
+
+const validText = [
+  "Completed td-123abc and queued review.",
+  'OTTO_RESULT {"command":"/bmad:td:next-step","action":"review","issueId":"td-123abc","outcome":"completed","confidence":"high","summary":"Completed td-123abc and queued review."}',
+].join("\n");
+
+const validParsed = parseWorkflowResult(validText);
+assert.equal(validParsed.malformed, false);
+assert.deepEqual(validParsed.result, {
+  command: "/bmad:td:next-step",
+  action: "review",
+  issueId: "td-123abc",
+  outcome: "completed",
+  confidence: "high",
+  summary: "Completed td-123abc and queued review.",
+});
+
+const mismatched = resolveWorkflowResult(validText, "/bmad:td:validate-prd");
+assert.equal(mismatched.resultSource, "mismatched");
+assert.equal(mismatched.result, null);
+assert.match(mismatched.error ?? "", /command mismatch/);
+
+const malformed = resolveWorkflowResult(
+  'OTTO_RESULT {"command": }',
+  "/bmad:td:next-step",
+);
+assert.equal(malformed.resultSource, "malformed");
+assert.equal(malformed.result, null);
+assert.equal(malformed.error, "Malformed OTTO_RESULT payload.");
+
+const heuristic = resolveWorkflowResult(
+  "No reviewable or ready issues remain.",
+  "/bmad:td:next-step",
+);
+assert.equal(heuristic.resultSource, "heuristic");
+assert.equal(heuristic.result, null);
+assert.equal(heuristic.error, null);
+assert.equal(heuristic.summary, "No reviewable or ready issues remain.");
+
+assert.equal(classifyAction("Implement td-abc123 now."), "implementation");
+assert.equal(classifyAction("Run code-review on td-abc123."), "review");
+assert.equal(
+  classifyOutcome("Need your direction before continuing."),
+  "needs-input",
+);
+assert.equal(
+  classifyOutcome("This task is blocked waiting on td-xyz999."),
+  "blocked",
+);
+assert.equal(classifyOutcome("No open issues remain."), "no-work");
+assert.equal(classifyOutcome("The workflow failed to continue."), "failed");
+assert.equal(parseIssueId("Focus td-abc123 then continue."), "td-abc123");
+assert.equal(parseIssueId("No issue present."), null);
+assert.equal(shortText("  hello   world  "), "hello world");
+
+console.log("Otto result contract checks passed.");

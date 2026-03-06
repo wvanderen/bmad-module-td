@@ -1,0 +1,165 @@
+export const RESULT_PREFIX = "OTTO_RESULT";
+
+export const shortText = (text, max = 120) => {
+  const squashed = text.replace(/\s+/g, " ").trim();
+  if (squashed.length <= max) return squashed;
+  return `${squashed.slice(0, max - 3)}...`;
+};
+
+export const classifyAction = (assistantText) => {
+  const text = assistantText.toLowerCase();
+  if (text.includes("review") || text.includes("approve")) return "review";
+  if (text.includes("implement") || text.includes("in_progress")) {
+    return "implementation";
+  }
+  if (text.includes("validate-prd") || text.includes("requirements trace")) {
+    return "requirements-validation";
+  }
+  if (
+    text.includes("epic") ||
+    text.includes("create-story") ||
+    text.includes("code-review")
+  ) {
+    return "epic-workflow";
+  }
+  return "unknown";
+};
+
+export const classifyOutcome = (assistantText) => {
+  const text = assistantText.toLowerCase();
+  if (
+    text.includes("no reviewable") ||
+    text.includes("no ready") ||
+    text.includes("no open issues") ||
+    text.includes("no follow-up td work remains")
+  ) {
+    return "no-work";
+  }
+  if (
+    text.includes("blocked") ||
+    text.includes("waiting on") ||
+    text.includes("unable to")
+  ) {
+    return "blocked";
+  }
+  if (
+    text.includes("ask one targeted question") ||
+    text.includes("need your direction") ||
+    text.includes("wait for user direction")
+  ) {
+    return "needs-input";
+  }
+  if (text.includes("error") || text.includes("failed")) return "failed";
+  if (text.length > 0) return "completed";
+  return "unknown";
+};
+
+export const parseIssueId = (text) => {
+  const match = text.match(/\btd-[a-z0-9]+\b/i);
+  return match ? match[0] : null;
+};
+
+export const parseWorkflowResult = (assistantText) => {
+  const matches = [
+    ...assistantText.matchAll(
+      new RegExp(`^${RESULT_PREFIX}\\s+(\\{.*\\})$`, "gm"),
+    ),
+  ];
+  if (matches.length === 0) return { result: null, malformed: false };
+
+  const payload = matches[matches.length - 1]?.[1];
+  if (!payload) return { result: null, malformed: true };
+
+  try {
+    const parsed = JSON.parse(payload);
+    if (!parsed || typeof parsed !== "object") {
+      return { result: null, malformed: true };
+    }
+
+    const action =
+      parsed.action === "review" ||
+      parsed.action === "implementation" ||
+      parsed.action === "requirements-validation" ||
+      parsed.action === "epic-workflow"
+        ? parsed.action
+        : "unknown";
+    const outcome =
+      parsed.outcome === "completed" ||
+      parsed.outcome === "blocked" ||
+      parsed.outcome === "needs-input" ||
+      parsed.outcome === "no-work" ||
+      parsed.outcome === "failed"
+        ? parsed.outcome
+        : "unknown";
+    const confidence =
+      parsed.confidence === "high" ||
+      parsed.confidence === "medium" ||
+      parsed.confidence === "low"
+        ? parsed.confidence
+        : "unknown";
+    const summary =
+      typeof parsed.summary === "string" && parsed.summary.trim().length > 0
+        ? shortText(parsed.summary, 160)
+        : "No structured summary.";
+    const issueId =
+      typeof parsed.issueId === "string" &&
+      /\btd-[a-z0-9]+\b/i.test(parsed.issueId)
+        ? (parsed.issueId.match(/\btd-[a-z0-9]+\b/i)?.[0] ?? null)
+        : null;
+
+    return {
+      result:
+        typeof parsed.command === "string" && parsed.command.trim().length > 0
+          ? {
+              command: parsed.command,
+              action,
+              issueId,
+              outcome,
+              confidence,
+              summary,
+            }
+          : null,
+      malformed: false,
+    };
+  } catch {
+    return { result: null, malformed: true };
+  }
+};
+
+export const resolveWorkflowResult = (assistantText, completedCommand) => {
+  const parsedWorkflowResult = parseWorkflowResult(assistantText);
+
+  if (parsedWorkflowResult.malformed) {
+    return {
+      result: null,
+      resultSource: "malformed",
+      error: "Malformed OTTO_RESULT payload.",
+      summary: shortText(assistantText || "No assistant summary."),
+    };
+  }
+
+  if (parsedWorkflowResult.result) {
+    if (parsedWorkflowResult.result.command !== completedCommand) {
+      return {
+        result: null,
+        resultSource: "mismatched",
+        error: `OTTO_RESULT command mismatch: expected ${completedCommand}, got ${parsedWorkflowResult.result.command}.`,
+        summary: parsedWorkflowResult.result.summary,
+      };
+    }
+
+    return {
+      result: parsedWorkflowResult.result,
+      resultSource: "structured",
+      error: null,
+      summary: parsedWorkflowResult.result.summary,
+    };
+  }
+
+  return {
+    result: null,
+    resultSource: "heuristic",
+    error: null,
+    summary: shortText(assistantText || "No assistant summary."),
+  };
+};
