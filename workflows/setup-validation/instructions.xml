@@ -8,13 +8,16 @@
     <action>Run `td usage --new-session` if needed, otherwise `td usage -q`</action>
     <action>Inspect whether {validation_methodology_file} already exists</action>
     <action>Inspect {architecture_file} if present to infer stack and runtime components</action>
-    <action>Detect available project verification commands (tests, lint, typecheck, build, smoke/integration)</action>
+    <action>Infer project type (`web`, `cli`, `tui`, `hybrid`), platform, and likely requirement classes from architecture, manifests, changed surfaces, and workspace conventions</action>
+    <action>Detect available project verification commands (tests, lint, typecheck, build, smoke/integration, browser automation, screenshot capture, accessibility checks)</action>
   </step>
 
   <step n="2" goal="Build or update validation methodology config">
     <action>Create or update {validation_methodology_file} using {validation_template}</action>
     <action>Populate command gates with discovered project commands and deterministic pass criteria</action>
-    <action>Define mandatory review evidence requirements (command outputs, changed files, risk notes)</action>
+    <action>Persist detected defaults into profile selection context and enable only the profile combinations relevant to the project</action>
+    <action>For web or hybrid UI work, require visual gates for desktop/mobile screenshots, contrast checks, and visual stability or explicit skip rationale when tooling is unavailable</action>
+    <action>Define mandatory review evidence requirements (validation context, command outputs, changed files, artifacts, confidence, risk notes)</action>
     <action>Define fallback policy when a gate is unavailable (for example: mark as skipped with rationale and compensating checks)</action>
     <action>Prefer defaults and ask only when a missing decision changes review rigor materially</action>
   </step>
@@ -27,7 +30,8 @@
 
   <step n="4" goal="Verify and hand off">
     <action>Run configured gates that are executable in current context and capture baseline results</action>
-    <action>Report configured mandatory gates, optional gates, fallback policy, and current baseline pass/fail status</action>
+    <action>Report detected validation context, configured profiles, mandatory gates, optional gates, fallback policy, and current baseline pass/fail or skip status</action>
+    <action>List missing tools with explicit skip rationale expectations so future reviews can stay machine-checkable</action>
     <output>Validation methodology configured. `next-step` reviews and implementations must use this file as a critical verification gate.</output>
   </step>
 </workflow>

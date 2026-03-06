@@ -1,4 +1,4 @@
-version: 1
+version: 2
 updated_by: "{user_name}"
 updated_at: "{date}"
 
@@ -43,6 +43,33 @@ gates:
         - review
       optional_if_missing: true
 
+    - id: visual-regression
+      description: "Capture desktop/mobile visual evidence for UI-impacting changes"
+      command: "npm run visual:check"
+      pass_criteria: "Baseline comparison passes and screenshots are attached"
+      required_for:
+        - implementation
+        - review
+      optional_if_missing: true
+
+    - id: contrast
+      description: "Verify text and interactive contrast for changed UI states"
+      command: "npm run a11y:contrast"
+      pass_criteria: "No blocking contrast violations"
+      required_for:
+        - implementation
+        - review
+      optional_if_missing: true
+
+    - id: visual-stability
+      description: "Check for flicker, layout instability, or motion regressions"
+      command: "npm run visual:stability"
+      pass_criteria: "No blocking instability or flicker observed"
+      required_for:
+        - implementation
+        - review
+      optional_if_missing: true
+
   optional:
     - id: smoke
       description: "Smoke test core user journey"
@@ -54,12 +81,157 @@ gates:
       command: "npm run security"
       pass_criteria: "No blocking vulnerabilities"
 
+profile_dimensions:
+  project_type:
+    - web
+    - cli
+    - tui
+    - hybrid
+  platform:
+    - linux
+    - macos
+    - windows
+    - cross-platform
+  requirement_class:
+    - ui-visual
+    - accessibility
+    - performance
+    - api
+    - data
+    - security
+    - reliability
+    - developer-experience
+
+profile_selection:
+  enabled: true
+  mode: "combine-matching-profiles"
+  default_context:
+    project_type: "replace-with-detected-project-type"
+    platform: "replace-with-detected-platform"
+    requirement_classes:
+      - "replace-with-detected-requirement-class"
+  deterministic_merge:
+    - "Match profiles by explicit criteria values or '*' wildcard"
+    - "Sort matching profiles by priority ascending, then id ascending"
+    - "Merge gate IDs in sorted order and de-duplicate by gate id"
+    - "When the same gate id appears multiple times, the first match after sorting wins"
+  fallback:
+    profile_id: "default-core"
+    if_no_profile_matches:
+      - "Use fallback profile gate IDs"
+      - "If fallback profile is missing, use legacy gates.mandatory and gates.optional"
+      - "Mark confidence as reduced and record rationale"
+
+validation_profiles:
+  - id: default-core
+    priority: 100
+    match:
+      project_type: "*"
+      platform: "*"
+      requirement_class: "*"
+    mandatory_gate_ids:
+      - tests
+      - lint
+      - typecheck
+    optional_gate_ids:
+      - build
+      - smoke
+      - security
+
+  - id: web-ui-baseline
+    priority: 40
+    match:
+      project_type: web
+      platform: "*"
+      requirement_class: ui-visual
+    mandatory_gate_ids:
+      - tests
+      - lint
+      - typecheck
+      - build
+      - smoke
+      - visual-regression
+      - contrast
+      - visual-stability
+    optional_gate_ids:
+      - security
+
+  - id: hybrid-ui-baseline
+    priority: 45
+    match:
+      project_type: hybrid
+      platform: "*"
+      requirement_class: ui-visual
+    mandatory_gate_ids:
+      - tests
+      - lint
+      - typecheck
+      - build
+      - visual-regression
+      - contrast
+      - visual-stability
+    optional_gate_ids:
+      - smoke
+      - security
+
+  - id: cli-api-baseline
+    priority: 50
+    match:
+      project_type: cli
+      platform: "*"
+      requirement_class: api
+    mandatory_gate_ids:
+      - tests
+      - lint
+      - typecheck
+    optional_gate_ids:
+      - smoke
+      - security
+
+compatibility:
+  legacy_flat_gates_supported: true
+  legacy_behavior:
+    - "If validation_profiles is absent or disabled, use gates.mandatory and gates.optional exactly as before"
+    - "Existing methodology files with only gates.* remain valid"
+
 review_requirements:
   must_include:
+    - "Validation context (project type, platform, requirement classes)"
     - "Changed files list"
     - "Gate results (pass/fail/skip with reason)"
+    - "Evidence artifacts with file paths or command transcripts"
+    - "Confidence level (high/medium/low) with rationale"
     - "Risk notes"
     - "Follow-up issues for deferred risks"
+
+evidence_contract:
+  machine_checkable_fields:
+    - validation_context
+    - changed_files
+    - gate_results
+    - artifacts
+    - confidence
+    - risks
+    - follow_ups
+  project_variants:
+    web_ui:
+      required_artifacts:
+        - "Desktop screenshot path or URL"
+        - "Mobile screenshot path or URL"
+        - "Visual regression output or explicit skip rationale"
+        - "Contrast verification output or explicit skip rationale"
+        - "Visual stability/flicker verification output or explicit skip rationale"
+    cli:
+      required_artifacts:
+        - "Representative command transcript or log excerpt"
+        - "Terminal output for impacted flows"
+    tui:
+      required_artifacts:
+        - "Terminal capture, asciinema, or equivalent screen artifact"
+        - "Interaction transcript for impacted flows"
+    hybrid:
+      required_artifacts:
+        - "Artifacts for each impacted surface (web, cli, tui)"
 
 fallback:
   when_config_missing:

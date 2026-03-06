@@ -59,6 +59,34 @@ The `next-step` workflow uses this strict priority order:
 - Agents must verify changes beyond tests (for example: lint, typecheck, build, smoke, security checks where available).
 - If validation config is missing, `next-step` runs fallback checks and reports reduced confidence.
 
+### Profile-Based Validation Selection
+
+The validation template supports profile-based gate selection so verification can adapt to project type and runtime context.
+
+- Dimensions: `project_type` (`web`, `cli`, `tui`, `hybrid`), `platform` (`linux`, `macos`, `windows`, `cross-platform`), and `requirement_class` (for example `ui-visual`, `api`, `data`).
+- Matching: profiles support explicit values and `*` wildcard matching.
+- Deterministic merge order: sort matching profiles by `priority` ascending, then `id` ascending.
+- Gate conflict rule: when a gate id appears in multiple matching profiles, the first match in deterministic order wins.
+- Fallback: use configured fallback profile; if unavailable, fall back to legacy `gates.mandatory` and `gates.optional` and mark reduced confidence.
+
+Backward compatibility is preserved: existing flat-gate methodology files remain valid without profile sections.
+
+### Visual Evidence Gates
+
+UI-impacting `web` and `hybrid` work must carry visual evidence as part of validation:
+
+- Required gates: `visual-regression`, `contrast`, and `visual-stability` are added to matching UI profiles.
+- Required artifacts: desktop and mobile screenshots, plus command output or an explicit skip rationale for each unavailable visual check.
+- Reduced confidence: if browser automation, screenshot capture, or contrast tooling is unavailable, `next-step` and reviews must mark confidence as reduced and record compensating checks.
+
+### Evidence Output Contract
+
+Validation evidence should stay machine-checkable across implementations and reviews.
+
+- Required fields: validation context, changed files, gate results, artifact references, confidence, risks, and follow-up issues.
+- Web UI work: include screenshot paths or URLs and visual check outputs.
+- CLI/TUI work: include representative command transcripts, terminal captures, or equivalent runtime evidence.
+
 ## Commit Message Format
 
 ```

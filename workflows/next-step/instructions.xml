@@ -14,6 +14,7 @@
     <action>Inspect BMAD planning artifacts to identify empty epics and epics with all tasks complete</action>
     <action>Load project context from {project_context} if present</action>
     <action>Load validation methodology from {validation_methodology_file} if present</action>
+    <action>Infer validation context for the current issue from issue description, linked story context, changed surfaces, and validation defaults (project type, platform, requirement classes)</action>
     <check if="{validation_methodology_file} is missing">
       <action>Mark review confidence as reduced and enforce fallback verification: run tests, lint, typecheck, build, and smoke checks where available</action>
       <action>Add recommendation to run `/bmad:td:setup-validation` before future reviews</action>
@@ -35,9 +36,12 @@
     <check if="selected action is review">
       <critical>Review must run in a different session than implementation per td separation rules.</critical>
       <action>Load issue context, linked story context, and recent code changes</action>
-      <action>Apply validation methodology gates from {validation_methodology_file}</action>
+      <action>Resolve matching validation profiles using deterministic merge rules, falling back to configured default profile or legacy flat gates when needed</action>
+      <action>Apply the selected mandatory and optional validation gates from {validation_methodology_file}</action>
+      <action>For UI-impacting web or hybrid changes, require desktop/mobile screenshots plus contrast and visual stability evidence, or mark reduced confidence with explicit skip rationale</action>
       <action>When methodology defines commands, execute them and capture pass/fail evidence</action>
       <action>When methodology is missing, run fallback verification suite and clearly state reduced confidence</action>
+      <action>Produce machine-checkable evidence output containing validation context, changed files, gate results, artifact references, confidence, risks, and follow-ups</action>
       <action>Produce review decision with concrete findings and required follow-ups</action>
       <action>Submit review using td review workflow commands</action>
     </check>
@@ -45,9 +49,11 @@
     <check if="selected action is implementation">
       <action>Start issue with `td start {id}` and set focus</action>
       <action>Implement only the selected issue scope</action>
+      <action>Resolve matching validation profiles using issue context before selecting required gates</action>
       <action>Run required validation methodology checks (or fallback checks if methodology absent)</action>
+      <action>For UI-impacting web or hybrid changes, capture desktop/mobile screenshots and visual evidence before handoff, or record reduced confidence with explicit skip rationale</action>
       <action>Do not move to review until verification evidence is recorded</action>
-      <action>Create td handoff including implementation details and validation evidence</action>
+      <action>Create td handoff including implementation details and machine-checkable validation evidence</action>
       <action>Submit issue for review</action>
     </check>
 
@@ -61,7 +67,7 @@
     <check if="code or docs changed as part of execution">
       <action>Create git commit using the module commit-message format and include td references</action>
     </check>
-    <action>Report what action was executed, which priority branch it came from, and what is next</action>
+    <action>Report what action was executed, which priority branch it came from, which validation context and profiles were applied, and what is next</action>
     <action>If validation methodology was absent or weak, recommend `/bmad:td:setup-validation`</action>
   </step>
 </workflow>
