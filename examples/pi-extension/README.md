@@ -37,7 +37,7 @@ Then run `/reload` in Pi.
 - `/bmad:td:next-step` (extension wrapper)
 - `/bmad-td-initialize` (alias)
 - `/bmad-td-next-step` (alias)
-- `/bmad-auto-start [--skip-init] [--max-iterations=N] [--max-failures=N]`
+- `/bmad-auto-start [--skip-init] [--max-iterations=N] [--max-failures=N] [--same-session]`
 - `/bmad-auto-status`
 - `/bmad-auto-pause`
 - `/bmad-auto-resume`
@@ -49,3 +49,4 @@ Then run `/reload` in Pi.
 - Checkpoints are labeled in the session tree as `auto:<runId>:iter-<N>`.
 - `/bmad-auto-dive` can either navigate to a checkpoint or fork from it.
 - Autopilot stops when no reviewable/ready td issues remain, max iterations are hit, or failure budget is exhausted.
+- By default, autopilot hops to a fresh session between `next-step` iterations. Use `--same-session` to disable.

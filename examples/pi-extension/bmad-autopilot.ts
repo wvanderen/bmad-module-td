@@ -42,6 +42,7 @@ interface RunState {
   stopReason: string | null;
   checkpoints: Checkpoint[];
   awaitingCommand: string | null;
+  freshSessionBetweenSteps: boolean;
 }
 
 const newRunState = (): RunState => ({
@@ -61,6 +62,7 @@ const newRunState = (): RunState => ({
   stopReason: null,
   checkpoints: [],
   awaitingCommand: null,
+  freshSessionBetweenSteps: true,
 });
 
 const shortText = (text: string, max = 120): string => {
@@ -112,7 +114,12 @@ const parseIssueId = (text: string): string | null => {
 
 const parseStartArgs = (
   args: string,
-): { skipInit: boolean; maxIterations?: number; maxFailures?: number } => {
+): {
+  skipInit: boolean;
+  maxIterations?: number;
+  maxFailures?: number;
+  sameSession?: boolean;
+} => {
   const tokens = args
     .split(" ")
     .map((token) => token.trim())
@@ -122,10 +129,12 @@ const parseStartArgs = (
     skipInit: boolean;
     maxIterations?: number;
     maxFailures?: number;
+    sameSession?: boolean;
   } = { skipInit: false };
 
   for (const token of tokens) {
     if (token === "--skip-init") parsed.skipInit = true;
+    if (token === "--same-session") parsed.sameSession = true;
     if (token.startsWith("--max-iterations=")) {
       const value = Number.parseInt(
         token.slice("--max-iterations=".length),
@@ -166,7 +175,7 @@ const workflowPrompt = (
             instructions:
               "_bmad/td-integration/workflows/next-step/instructions.xml",
             extra:
-              "Use strict priority: reviews first, then ready issues, then epic maintenance workflows.",
+              "Use strict priority: reviews first, then ready issues, then epic maintenance workflows. Execute exactly one action, then stop and return.",
           }
         : command === "/bmad:bmm:create-architecture"
           ? {
@@ -246,6 +255,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       `Last command: ${state.lastCommand ?? "-"}`,
       `Last action: ${state.lastAction ?? "-"}`,
       `Last issue: ${state.lastIssueId ?? "-"}`,
+      `Session hop: ${state.freshSessionBetweenSteps ? "on" : "off"}`,
     ];
 
     if (state.stopReason) widgetLines.push(`Reason: ${state.stopReason}`);
@@ -293,6 +303,44 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     state.lastProgressAt = Date.now();
     persistState(`queued:${command}`);
     updateUi(ctx);
+  };
+
+  const continueWithFreshSession = (ctx: ExtensionContext): void => {
+    state.awaitingCommand = null;
+    persistState("queue-session-hop");
+    updateUi(ctx);
+
+    const options = ctx.isIdle()
+      ? undefined
+      : { deliverAs: "followUp" as const };
+    pi.sendUserMessage("/bmad-auto-continue", options);
+  };
+
+  const compactAndQueueNextStep = (ctx: ExtensionContext): void => {
+    state.awaitingCommand = null;
+    persistState("compact-before-next-step");
+    updateUi(ctx);
+
+    ctx.compact({
+      customInstructions:
+        "Preserve only concise BMAD autopilot continuity: current run phase, latest td issue/action, validation status, unresolved blockers, and immediate next-step context.",
+      onComplete: () => {
+        if (!state.active || state.phase !== "running") return;
+        queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
+      },
+      onError: () => {
+        if (!state.active || state.phase !== "running") return;
+        queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
+      },
+    });
+  };
+
+  const queueNextStepIteration = (ctx: ExtensionContext): void => {
+    if (state.freshSessionBetweenSteps) {
+      continueWithFreshSession(ctx);
+      return;
+    }
+    compactAndQueueNextStep(ctx);
   };
 
   const hasRemainingWork = async (): Promise<boolean> => {
@@ -428,7 +476,6 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
 
     if (completedCommand === INIT_COMMAND) {
       state.phase = "running";
-      state.awaitingCommand = NEXT_STEP_COMMAND;
       persistState("init-complete");
       if (ctx.hasUI) {
         ctx.ui.notify(
@@ -436,7 +483,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
           "success",
         );
       }
-      queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
+      queueNextStepIteration(ctx);
       return;
     }
 
@@ -469,9 +516,25 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       return;
     }
 
-    state.awaitingCommand = NEXT_STEP_COMMAND;
     persistState("loop-continue");
-    queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
+    queueNextStepIteration(ctx);
+  });
+
+  pi.registerCommand("bmad-auto-continue", {
+    description: "Internal: continue autopilot in fresh session",
+    handler: async (_args, ctx: ExtensionCommandContext) => {
+      if (!state.active || state.phase !== "running") return;
+
+      const result = await ctx.newSession();
+      if (result.cancelled) {
+        stopRun(ctx, "error", "Session rotation cancelled.");
+        return;
+      }
+
+      persistState("session-rotated");
+      updateUi(ctx);
+      queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
+    },
   });
 
   registerWorkflowCommand(
@@ -553,6 +616,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         phase: parsed.skipInit ? "running" : "initializing",
         maxIterations: parsed.maxIterations ?? state.maxIterations,
         maxFailures: parsed.maxFailures ?? state.maxFailures,
+        freshSessionBetweenSteps: parsed.sameSession ? false : true,
         lastProgressAt: now,
         awaitingCommand: parsed.skipInit ? NEXT_STEP_COMMAND : INIT_COMMAND,
       };

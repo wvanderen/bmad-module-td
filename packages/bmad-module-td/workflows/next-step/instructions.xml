@@ -5,6 +5,8 @@
   <critical>Execute the unified next-step workflow directly from these instructions. Do not rely on an external skill file.</critical>
   <critical>Ask questions when unclear - do not guess.</critical>
   <critical>Validation methodology is a mandatory review gate. Reviews and implementations must use {validation_methodology_file} when available.</critical>
+  <critical>Single-action mode is mandatory: execute exactly ONE highest-priority action per invocation, then stop and hand off.</critical>
+  <critical>Never chain multiple issues/actions in one invocation. Never recurse into next-step from inside next-step.</critical>
 
   <step n="1" goal="Analyze workspace state">
     <action>Run `td usage --new-session` if this is a fresh context; otherwise run `td usage -q`</action>
@@ -32,6 +34,7 @@
   </step>
 
   <step n="3" goal="Execute chosen action">
+    <action>Execute only the single action chosen in step 2. Do not select another action in this invocation.</action>
     <check if="selected action is review">
       <critical>Review must run in a different session than implementation per td separation rules.</critical>
       <action>Load issue context, linked story context, and recent code changes</action>
@@ -62,6 +65,7 @@
       <action>Create git commit using the module commit-message format and include td references</action>
     </check>
     <action>Report what action was executed, which priority branch it came from, and what is next</action>
+    <action>End the invocation immediately after the report so autopilot can start a fresh next-step iteration.</action>
     <action>If validation methodology was absent or weak, recommend `/bmad:td:setup-validation`</action>
   </step>
 </workflow>
