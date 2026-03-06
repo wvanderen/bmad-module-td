@@ -119,14 +119,16 @@ It provides an autopilot loop for `/bmad:td:initialize -> /bmad:td:next-step`, w
 ## Publishing
 
 ```bash
-# Patch release
-npm run release
+# Bump module package version (choose one)
+npm run release:module:patch
+npm run release:module:minor
+npm run release:module:major
 
-# Minor release
-npm run release:minor
+# Publish module package
+npm run publish:module
 
-# Major release
-npm run release:major
+# One-step bump + publish
+npm run release:module:patch:publish
 ```
 
 ## License

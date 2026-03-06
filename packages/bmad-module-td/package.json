@@ -27,10 +27,11 @@
     "lint:fix": "eslint . --ext .js,.cjs,.mjs,.yaml --fix",
     "lint:md": "markdownlint-cli2 \"**/*.md\"",
     "release": "npm run release:patch",
-    "release:major": "npm version major && git push --follow-tags && npm publish --access public",
-    "release:minor": "npm version minor && git push --follow-tags && npm publish --access public",
-    "release:patch": "npm version patch && git push --follow-tags && npm publish --access public",
-    "release:prerelease": "npm version prerelease && git push --follow-tags && npm publish --access public",
+    "release:major": "npm version major",
+    "release:minor": "npm version minor",
+    "release:patch": "npm version patch",
+    "release:prerelease": "npm version prerelease",
+    "publish:package": "npm publish --access public",
     "test": "npm run sync:check && npm run lint && npm run format:check"
   },
   "devDependencies": {

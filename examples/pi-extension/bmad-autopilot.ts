@@ -216,17 +216,6 @@ const workflowPrompt = (
   ].join("\n");
 };
 
-const promptMatchesWorkflowCommand = (
-  prompt: string,
-  command:
-    | "/bmad:td:initialize"
-    | "/bmad:td:next-step"
-    | "/bmad:bmm:create-architecture"
-    | "/bmad:bmm:create-epics-and-stories"
-    | "/bmad:bmm:create-story"
-    | "/bmad:bmm:code-review",
-): boolean => prompt.includes(`Execute BMAD workflow now: ${command}`);
-
 export default function bmadAutopilot(pi: ExtensionAPI) {
   let state = newRunState();
   let currentPrompt = "";
@@ -379,19 +368,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
   pi.on("agent_start", async (event, ctx) => {
     currentPrompt = typeof event.prompt === "string" ? event.prompt.trim() : "";
     if (!state.active) return;
-    if (
-      state.awaitingCommand &&
-      promptMatchesWorkflowCommand(
-        currentPrompt,
-        state.awaitingCommand as
-          | "/bmad:td:initialize"
-          | "/bmad:td:next-step"
-          | "/bmad:bmm:create-architecture"
-          | "/bmad:bmm:create-epics-and-stories"
-          | "/bmad:bmm:create-story"
-          | "/bmad:bmm:code-review",
-      )
-    ) {
+    if (state.awaitingCommand) {
       state.lastProgressAt = Date.now();
       updateUi(ctx);
     }
@@ -406,20 +383,9 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       state.phase === "error"
     )
       return;
-    if (
-      !state.awaitingCommand ||
-      !promptMatchesWorkflowCommand(
-        currentPrompt,
-        state.awaitingCommand as
-          | "/bmad:td:initialize"
-          | "/bmad:td:next-step"
-          | "/bmad:bmm:create-architecture"
-          | "/bmad:bmm:create-epics-and-stories"
-          | "/bmad:bmm:create-story"
-          | "/bmad:bmm:code-review",
-      )
-    )
-      return;
+    if (!state.awaitingCommand) return;
+
+    const completedCommand = state.awaitingCommand;
 
     const assistantText = extractAssistantText(event.messages as unknown[]);
     const summary = shortText(assistantText || "No assistant summary.");
@@ -429,7 +395,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       state.checkpoints.push({
         iteration: state.iteration,
         entryId,
-        command: currentPrompt,
+        command: completedCommand,
         summary,
         timestamp: Date.now(),
       });
@@ -460,10 +426,16 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       }
     }
 
-    if (currentPrompt === INIT_COMMAND) {
+    if (completedCommand === INIT_COMMAND) {
       state.phase = "running";
       state.awaitingCommand = NEXT_STEP_COMMAND;
       persistState("init-complete");
+      if (ctx.hasUI) {
+        ctx.ui.notify(
+          "Initialization complete, starting next-step loop.",
+          "success",
+        );
+      }
       queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
       return;
     }

@@ -22,3 +22,10 @@
 2. Run `npm run sync:module`.
 3. Reinstall module into sandbox with `npx bmad-method install --custom-content <repo>/packages/bmad-module-td --action update --yes`.
 4. Reload Pi extension and run bounded autopilot test.
+
+## Release Flow
+
+1. Ensure tests pass: `npm test`.
+2. Bump module version: `npm run release:module:patch` (or minor/major).
+3. Publish module: `npm run publish:module`.
+4. Push commit and tags manually.
