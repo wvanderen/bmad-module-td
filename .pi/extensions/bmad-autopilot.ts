@@ -6,7 +6,6 @@ import type {
 
 const INIT_COMMAND = "/bmad:td:initialize";
 const NEXT_STEP_COMMAND = "/bmad:td:next-step";
-const CONTINUE_COMMAND = "/bmad-auto-continue";
 const STATE_ENTRY_TYPE = "bmad-autopilot-state";
 
 type Phase =
@@ -43,7 +42,6 @@ interface RunState {
   stopReason: string | null;
   checkpoints: Checkpoint[];
   awaitingCommand: string | null;
-  freshSessionBetweenSteps: boolean;
 }
 
 const newRunState = (): RunState => ({
@@ -63,7 +61,6 @@ const newRunState = (): RunState => ({
   stopReason: null,
   checkpoints: [],
   awaitingCommand: null,
-  freshSessionBetweenSteps: true,
 });
 
 const shortText = (text: string, max = 120): string => {
@@ -115,12 +112,7 @@ const parseIssueId = (text: string): string | null => {
 
 const parseStartArgs = (
   args: string,
-): {
-  skipInit: boolean;
-  maxIterations?: number;
-  maxFailures?: number;
-  sameSession?: boolean;
-} => {
+): { skipInit: boolean; maxIterations?: number; maxFailures?: number } => {
   const tokens = args
     .split(" ")
     .map((token) => token.trim())
@@ -130,12 +122,10 @@ const parseStartArgs = (
     skipInit: boolean;
     maxIterations?: number;
     maxFailures?: number;
-    sameSession?: boolean;
   } = { skipInit: false };
 
   for (const token of tokens) {
     if (token === "--skip-init") parsed.skipInit = true;
-    if (token === "--same-session") parsed.sameSession = true;
     if (token.startsWith("--max-iterations=")) {
       const value = Number.parseInt(
         token.slice("--max-iterations=".length),
@@ -153,13 +143,7 @@ const parseStartArgs = (
 };
 
 const workflowPrompt = (
-  command:
-    | "/bmad:td:initialize"
-    | "/bmad:td:next-step"
-    | "/bmad:bmm:create-architecture"
-    | "/bmad:bmm:create-epics-and-stories"
-    | "/bmad:bmm:create-story"
-    | "/bmad:bmm:code-review",
+  command: "/bmad:td:initialize" | "/bmad:td:next-step",
 ): string => {
   const workflow =
     command === "/bmad:td:initialize"
@@ -170,45 +154,13 @@ const workflowPrompt = (
           extra:
             "If td has no open issues, treat that as setup-required and bootstrap planning + td mapping before finishing.",
         }
-      : command === "/bmad:td:next-step"
-        ? {
-            yaml: "_bmad/td-integration/workflows/next-step/workflow.yaml",
-            instructions:
-              "_bmad/td-integration/workflows/next-step/instructions.xml",
-            extra:
-              "Use strict priority: reviews first, then ready issues, then epic maintenance workflows. Execute exactly one action, then stop and return.",
-          }
-        : command === "/bmad:bmm:create-architecture"
-          ? {
-              yaml: "_bmad/bmm/workflows/3-solutioning/create-architecture/workflow.md",
-              instructions:
-                "_bmad/bmm/workflows/3-solutioning/create-architecture/workflow.md",
-              extra:
-                "Execute create-architecture from workflow files directly even if slash aliases are unavailable.",
-            }
-          : command === "/bmad:bmm:create-epics-and-stories"
-            ? {
-                yaml: "_bmad/bmm/workflows/3-solutioning/create-epics-and-stories/workflow.md",
-                instructions:
-                  "_bmad/bmm/workflows/3-solutioning/create-epics-and-stories/workflow.md",
-                extra:
-                  "Execute create-epics-and-stories from workflow files directly even if slash aliases are unavailable.",
-              }
-            : command === "/bmad:bmm:create-story"
-              ? {
-                  yaml: "_bmad/bmm/workflows/4-implementation/create-story/workflow.yaml",
-                  instructions:
-                    "_bmad/bmm/workflows/4-implementation/create-story/instructions.xml",
-                  extra:
-                    "Execute create-story from workflow files directly and report the selected story.",
-                }
-              : {
-                  yaml: "_bmad/bmm/workflows/4-implementation/code-review/workflow.yaml",
-                  instructions:
-                    "_bmad/bmm/workflows/4-implementation/code-review/instructions.xml",
-                  extra:
-                    "Execute code-review from workflow files directly and report findings and decision.",
-                };
+      : {
+          yaml: "_bmad/td-integration/workflows/next-step/workflow.yaml",
+          instructions:
+            "_bmad/td-integration/workflows/next-step/instructions.xml",
+          extra:
+            "Use strict priority: reviews first, then ready issues, then epic maintenance workflows.",
+        };
 
   return [
     `Execute BMAD workflow now: ${command}`,
@@ -256,7 +208,6 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       `Last command: ${state.lastCommand ?? "-"}`,
       `Last action: ${state.lastAction ?? "-"}`,
       `Last issue: ${state.lastIssueId ?? "-"}`,
-      `Session hop: ${state.freshSessionBetweenSteps ? "on" : "off"}`,
     ];
 
     if (state.stopReason) widgetLines.push(`Reason: ${state.stopReason}`);
@@ -286,19 +237,10 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     ctx: ExtensionContext,
     command: string,
   ): void => {
-    const prompt = workflowPrompt(
-      command as
-        | "/bmad:td:initialize"
-        | "/bmad:td:next-step"
-        | "/bmad:bmm:create-architecture"
-        | "/bmad:bmm:create-epics-and-stories"
-        | "/bmad:bmm:create-story"
-        | "/bmad:bmm:code-review",
-    );
     const options = ctx.isIdle()
       ? undefined
       : { deliverAs: "followUp" as const };
-    pi.sendUserMessage(prompt, options);
+    pi.sendUserMessage(command, options);
     state.awaitingCommand = command;
     state.lastCommand = command;
     state.lastProgressAt = Date.now();
@@ -306,97 +248,14 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     updateUi(ctx);
   };
 
-  const continueWithFreshSession = (ctx: ExtensionContext): void => {
-    const maybeNewSession = (
-      ctx as unknown as {
-        newSession?: () => Promise<{ cancelled?: boolean }>;
-      }
-    ).newSession;
-
-    if (typeof maybeNewSession === "function") {
-      state.awaitingCommand = null;
-      persistState("direct-session-hop-attempt");
-      updateUi(ctx);
-
-      void maybeNewSession
-        .call(ctx)
-        .then((result) => {
-          if (!state.active || state.phase !== "running") return;
-          if (result?.cancelled) {
-            stopRun(ctx, "error", "Session rotation cancelled.");
-            return;
-          }
-          persistState("session-rotated-direct");
-          updateUi(ctx);
-          queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
-        })
-        .catch(() => {
-          if (!state.active || state.phase !== "running") return;
-          state.awaitingCommand = CONTINUE_COMMAND;
-          persistState("queue-session-hop-fallback-command");
-          updateUi(ctx);
-
-          const options = ctx.isIdle()
-            ? undefined
-            : { deliverAs: "followUp" as const };
-          pi.sendUserMessage(CONTINUE_COMMAND, options);
-        });
-
-      return;
-    }
-
-    state.awaitingCommand = CONTINUE_COMMAND;
-    persistState("queue-session-hop");
-    updateUi(ctx);
-
-    const options = ctx.isIdle()
-      ? undefined
-      : { deliverAs: "followUp" as const };
-    pi.sendUserMessage(CONTINUE_COMMAND, options);
-  };
-
-  const compactAndQueueNextStep = (ctx: ExtensionContext): void => {
-    state.awaitingCommand = null;
-    persistState("compact-before-next-step");
-    updateUi(ctx);
-
-    ctx.compact({
-      customInstructions:
-        "Preserve only concise BMAD autopilot continuity: current run phase, latest td issue/action, validation status, unresolved blockers, and immediate next-step context.",
-      onComplete: () => {
-        if (!state.active || state.phase !== "running") return;
-        queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
-      },
-      onError: () => {
-        if (!state.active || state.phase !== "running") return;
-        queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
-      },
-    });
-  };
-
-  const queueNextStepIteration = (ctx: ExtensionContext): void => {
-    if (state.freshSessionBetweenSteps) {
-      continueWithFreshSession(ctx);
-      return;
-    }
-    compactAndQueueNextStep(ctx);
-  };
-
-  const hasRemainingWork = async (): Promise<{
-    hasImmediateWork: boolean;
-    hasInReview: boolean;
-  }> => {
-    const [reviewable, ready, inReview] = await Promise.all([
+  const hasRemainingWork = async (): Promise<boolean> => {
+    const [reviewable, ready] = await Promise.all([
       pi.exec("td", ["reviewable"], { timeout: 20000 }),
       pi.exec("td", ["ready"], { timeout: 20000 }),
-      pi.exec("td", ["in-review"], { timeout: 20000 }),
     ]);
 
-    const immediateOutput = `${reviewable.stdout}\n${ready.stdout}`;
-    const hasImmediateWork = /\btd-[a-z0-9]+\b/i.test(immediateOutput);
-    const hasInReview = /\btd-[a-z0-9]+\b/i.test(inReview.stdout);
-
-    return { hasImmediateWork, hasInReview };
+    const output = `${reviewable.stdout}\n${ready.stdout}`;
+    return /\btd-[a-z0-9]+\b/i.test(output);
   };
 
   const stopRun = (
@@ -421,13 +280,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
 
   const registerWorkflowCommand = (
     name: string,
-    command:
-      | "/bmad:td:initialize"
-      | "/bmad:td:next-step"
-      | "/bmad:bmm:create-architecture"
-      | "/bmad:bmm:create-epics-and-stories"
-      | "/bmad:bmm:create-story"
-      | "/bmad:bmm:code-review",
+    command: "/bmad:td:initialize" | "/bmad:td:next-step",
     description: string,
   ): void => {
     pi.registerCommand(name, {
@@ -462,7 +315,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
   pi.on("agent_start", async (event, ctx) => {
     currentPrompt = typeof event.prompt === "string" ? event.prompt.trim() : "";
     if (!state.active) return;
-    if (state.awaitingCommand) {
+    if (currentPrompt === state.awaitingCommand) {
       state.lastProgressAt = Date.now();
       updateUi(ctx);
     }
@@ -477,20 +330,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       state.phase === "error"
     )
       return;
-    if (!state.awaitingCommand) return;
-
-    const completedCommand = state.awaitingCommand;
-
-    if (completedCommand === CONTINUE_COMMAND) {
-      if (ctx.hasUI) {
-        ctx.ui.notify(
-          "Session-hop command was interpreted as a prompt; falling back to same-session compacted iteration.",
-          "warning",
-        );
-      }
-      compactAndQueueNextStep(ctx);
-      return;
-    }
+    if (currentPrompt !== state.awaitingCommand) return;
 
     const assistantText = extractAssistantText(event.messages as unknown[]);
     const summary = shortText(assistantText || "No assistant summary.");
@@ -500,7 +340,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       state.checkpoints.push({
         iteration: state.iteration,
         entryId,
-        command: completedCommand,
+        command: currentPrompt,
         summary,
         timestamp: Date.now(),
       });
@@ -531,16 +371,11 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       }
     }
 
-    if (completedCommand === INIT_COMMAND) {
+    if (currentPrompt === INIT_COMMAND) {
       state.phase = "running";
+      state.awaitingCommand = NEXT_STEP_COMMAND;
       persistState("init-complete");
-      if (ctx.hasUI) {
-        ctx.ui.notify(
-          "Initialization complete, starting next-step loop.",
-          "success",
-        );
-      }
-      queueNextStepIteration(ctx);
+      queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
       return;
     }
 
@@ -555,11 +390,8 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     }
 
     let workLeft = false;
-    let hasInReview = false;
     try {
-      const workState = await hasRemainingWork();
-      workLeft = workState.hasImmediateWork;
-      hasInReview = workState.hasInReview;
+      workLeft = await hasRemainingWork();
     } catch (error) {
       state.failures += 1;
       state.lastError =
@@ -572,45 +404,13 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     }
 
     if (!workLeft) {
-      if (hasInReview && state.freshSessionBetweenSteps) {
-        persistState("loop-continue-in-review-session-hop");
-        queueNextStepIteration(ctx);
-        return;
-      }
-
-      stopRun(
-        ctx,
-        "completed",
-        hasInReview
-          ? "Only in-review issues remain and session hopping is disabled."
-          : "No reviewable or ready issues remain.",
-      );
+      stopRun(ctx, "completed", "No reviewable or ready issues remain.");
       return;
     }
 
+    state.awaitingCommand = NEXT_STEP_COMMAND;
     persistState("loop-continue");
-    queueNextStepIteration(ctx);
-  });
-
-  pi.registerCommand("bmad-auto-continue", {
-    description: "Internal: continue autopilot in fresh session",
-    handler: async (_args, ctx: ExtensionCommandContext) => {
-      if (!state.active || state.phase !== "running") return;
-
-      state.awaitingCommand = null;
-      persistState("session-hop-command-received");
-      updateUi(ctx);
-
-      const result = await ctx.newSession();
-      if (result.cancelled) {
-        stopRun(ctx, "error", "Session rotation cancelled.");
-        return;
-      }
-
-      persistState("session-rotated");
-      updateUi(ctx);
-      queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
-    },
+    queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
   });
 
   registerWorkflowCommand(
@@ -633,46 +433,6 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     "/bmad:td:next-step",
     "Alias for /bmad:td:next-step",
   );
-  registerWorkflowCommand(
-    "bmad:bmm:create-architecture",
-    "/bmad:bmm:create-architecture",
-    "Run BMAD create-architecture workflow",
-  );
-  registerWorkflowCommand(
-    "bmad-bmm-create-architecture",
-    "/bmad:bmm:create-architecture",
-    "Alias for /bmad:bmm:create-architecture",
-  );
-  registerWorkflowCommand(
-    "bmad:bmm:create-epics-and-stories",
-    "/bmad:bmm:create-epics-and-stories",
-    "Run BMAD create-epics-and-stories workflow",
-  );
-  registerWorkflowCommand(
-    "bmad-bmm-create-epics-and-stories",
-    "/bmad:bmm:create-epics-and-stories",
-    "Alias for /bmad:bmm:create-epics-and-stories",
-  );
-  registerWorkflowCommand(
-    "bmad:bmm:create-story",
-    "/bmad:bmm:create-story",
-    "Run BMAD create-story workflow",
-  );
-  registerWorkflowCommand(
-    "bmad-bmm-create-story",
-    "/bmad:bmm:create-story",
-    "Alias for /bmad:bmm:create-story",
-  );
-  registerWorkflowCommand(
-    "bmad:bmm:code-review",
-    "/bmad:bmm:code-review",
-    "Run BMAD code-review workflow",
-  );
-  registerWorkflowCommand(
-    "bmad-bmm-code-review",
-    "/bmad:bmm:code-review",
-    "Alias for /bmad:bmm:code-review",
-  );
 
   pi.registerCommand("bmad-auto-start", {
     description: "Start BMAD initialize -> next-step autopilot",
@@ -692,7 +452,6 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         phase: parsed.skipInit ? "running" : "initializing",
         maxIterations: parsed.maxIterations ?? state.maxIterations,
         maxFailures: parsed.maxFailures ?? state.maxFailures,
-        freshSessionBetweenSteps: parsed.sameSession ? false : true,
         lastProgressAt: now,
         awaitingCommand: parsed.skipInit ? NEXT_STEP_COMMAND : INIT_COMMAND,
       };
