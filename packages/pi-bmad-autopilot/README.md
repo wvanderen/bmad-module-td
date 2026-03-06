@@ -60,15 +60,19 @@ That means passing tests can support a claim, but they should not outweigh weak 
 Otto currently provides:
 
 - automation around `/bmad:td:initialize`, `/bmad:td:next-step`, and `/bmad:td:validate-prd`
+- an onboarding flow via `/bmad-auto-onboard` for project-wide Otto preferences
 - workflow wrappers for BMAD planning, execution, and review flows
 - failure budgets, checkpoints, run state, and monitoring for longer loops
 - fresh-session continuation tools such as dive, fork, and session hopping
 - PRD gap reopening so weak or partial delivery becomes real follow-up work
 - optional workflow-specific steering via `party` mode
+- a packaged `otto` skill resource discoverable by Pi agents
 
 ## Configuration
 
-Otto reads optional JSON preferences from:
+Run `/bmad-auto-onboard` to save project-wide Otto preferences into `.pi/bmad-autopilot.json`.
+
+Otto reads optional JSON preferences from, in increasing precedence:
 
 - `.bmad-autopilot.json`
 - `.pi/bmad-autopilot.json`
@@ -86,10 +90,12 @@ This supports mixed autonomy rather than one fixed control philosophy.
 Current source of truth:
 
 - `examples/pi-extension/bmad-autopilot.ts`
+- `examples/pi-extension/skills/otto/SKILL.md`
 
 Before `npm pack` or `npm publish`, the package sync step copies that source into:
 
 - `packages/pi-bmad-autopilot/src/bmad-autopilot.ts`
+- `packages/pi-bmad-autopilot/skills/otto/SKILL.md`
 
 That keeps local Pi iteration centered on the example extension while still shipping the real source in the published Otto package.
 

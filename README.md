@@ -174,11 +174,13 @@ What Otto is optimized for:
 Current Otto capabilities include:
 
 - an automation loop for `/bmad:td:initialize -> /bmad:td:next-step -> /bmad:td:validate-prd`
+- a Pi onboarding flow via `/bmad-auto-onboard` that writes project-wide Otto preferences
 - workflow wrappers for BMAD planning and review flows
 - workflow monitoring, failure budgets, and persisted run state
 - fresh-session continuation with checkpoint-based dive and fork tools
-- optional JSON preferences from `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, or `BMAD_AUTOPILOT_CONFIG`
+- layered JSON preferences from `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, and `BMAD_AUTOPILOT_CONFIG`
 - per-workflow execution modes such as `party` for higher-steering workflows
+- a packaged `otto` SKILL resource for Pi agents
 
 Otto strategy docs:
 

@@ -1,4 +1,4 @@
-import { copyFileSync } from "node:fs";
+import { copyFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 const rootDir = resolve(import.meta.dirname, "..");
@@ -15,6 +15,16 @@ const resultHelperTargetPath = resolve(
   rootDir,
   "packages/pi-bmad-autopilot/src/otto-result.mjs",
 );
+const skillSourcePath = resolve(
+  rootDir,
+  "examples/pi-extension/skills/otto/SKILL.md",
+);
+const skillTargetPath = resolve(
+  rootDir,
+  "packages/pi-bmad-autopilot/skills/otto/SKILL.md",
+);
 
 copyFileSync(sourcePath, targetPath);
 copyFileSync(resultHelperSourcePath, resultHelperTargetPath);
+mkdirSync(resolve(skillTargetPath, ".."), { recursive: true });
+copyFileSync(skillSourcePath, skillTargetPath);

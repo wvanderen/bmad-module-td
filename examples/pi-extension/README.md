@@ -39,6 +39,8 @@ Then run `/reload` in Pi.
 - `/bmad-td-initialize` (alias)
 - `/bmad-td-next-step` (alias)
 - `/bmad-td-validate-prd` (alias)
+- `/bmad-auto-onboard`
+- `/otto-onboard` (alias)
 - `/bmad-auto-start [--skip-init] [--max-iterations=N] [--max-failures=N] [--same-session]`
 - `/bmad-auto-status`
 - `/bmad-auto-pause`
@@ -46,9 +48,17 @@ Then run `/reload` in Pi.
 - `/bmad-auto-stop [reason]`
 - `/bmad-auto-dive`
 
-## Preferences
+## Preferences And Onboarding
 
-Otto can load optional JSON preferences from either `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, or the path in `BMAD_AUTOPILOT_CONFIG`.
+Run `/bmad-auto-onboard` to save project-wide Otto preferences into `.pi/bmad-autopilot.json`.
+
+Otto loads preferences in this precedence order:
+
+1. `.bmad-autopilot.json`
+2. `.pi/bmad-autopilot.json`
+3. `BMAD_AUTOPILOT_CONFIG`
+
+That keeps older config paths working while making `.pi/bmad-autopilot.json` the preferred project-local home for Otto settings.
 
 Example:
 
@@ -70,6 +80,13 @@ Example:
 
 - `defaults` sets the fallback behavior for `/bmad-auto-start`.
 - `workflows.commandModes` lets you opt specific workflows into `party` mode while keeping the rest accept-default.
+
+## Otto Skill Resource
+
+The packaged Otto extension ships an `otto` skill resource for Pi agents.
+
+- Source of truth: `examples/pi-extension/skills/otto/SKILL.md`
+- Packaged path: `packages/pi-bmad-autopilot/skills/otto/SKILL.md`
 
 ## Notes
 

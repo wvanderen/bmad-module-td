@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { relative, resolve } from "node:path";
 
 import type {
   ExtensionAPI,
@@ -45,6 +45,11 @@ type OutcomeKind =
   | "failed"
   | "unknown";
 type ConfidenceKind = "high" | "medium" | "low" | "unknown";
+type ContinuityKind =
+  | "none"
+  | "fresh-session"
+  | "same-session-compacted"
+  | "compaction-fallback";
 type ResultSourceKind =
   | "structured"
   | "heuristic"
@@ -72,6 +77,23 @@ interface LoadedPreferences {
 }
 
 const CONFIG_PATHS = [".bmad-autopilot.json", ".pi/bmad-autopilot.json"];
+const PROJECT_PREFERENCES_PATH = ".pi/bmad-autopilot.json";
+const PREFERENCE_ONBOARDING_HINT =
+  "Otto is using built-in defaults. Run /bmad-auto-onboard to save project preferences.";
+const ONBOARDING_MARKER_ENTRY_TYPE = "bmad-autopilot-onboarding-hint";
+const ONBOARDING_MARKER_VERSION = 1;
+
+type PreferenceChoice<T> = {
+  label: string;
+  value: T;
+};
+
+type WorkflowPreferenceOverride = WorkflowMode | "inherit";
+
+interface PreferenceCandidate {
+  label: string;
+  path: string;
+}
 
 type Phase =
   | "idle"
@@ -105,6 +127,15 @@ interface Checkpoint {
   iteration: number;
   entryId: string;
   command: string;
+  issueId: string | null;
+  action: ActionKind | null;
+  outcome: OutcomeKind | null;
+  confidence: ConfidenceKind;
+  queueState: QueueState;
+  continuity: ContinuityKind;
+  continuityReason: string | null;
+  alert: string | null;
+  reason: string | null;
   summary: string;
   timestamp: number;
 }
@@ -120,9 +151,13 @@ interface RunState {
   maxFailures: number;
   lastCommand: string | null;
   lastAction: ActionKind | null;
+  lastDecisionReason: string | null;
   lastOutcome: OutcomeKind | null;
   lastConfidence: ConfidenceKind;
   lastResultSource: ResultSourceKind;
+  lastCommandMode: WorkflowMode;
+  lastContinuation: ContinuityKind;
+  lastContinuationReason: string | null;
   lastIssueId: string | null;
   lastError: string | null;
   lastProgressAt: number;
@@ -133,6 +168,8 @@ interface RunState {
   checkpoints: Checkpoint[];
   awaitingCommand: string | null;
   awaitingPrompt: string | null;
+  awaitingToken: string | null;
+  awaitingStarted: boolean;
   freshSessionBetweenSteps: boolean;
 }
 
@@ -147,9 +184,13 @@ const newRunState = (): RunState => ({
   maxFailures: 3,
   lastCommand: null,
   lastAction: null,
+  lastDecisionReason: null,
   lastOutcome: null,
   lastConfidence: "unknown",
   lastResultSource: null,
+  lastCommandMode: "accept-default",
+  lastContinuation: "none",
+  lastContinuationReason: null,
   lastIssueId: null,
   lastError: null,
   lastProgressAt: Date.now(),
@@ -160,8 +201,75 @@ const newRunState = (): RunState => ({
   checkpoints: [],
   awaitingCommand: null,
   awaitingPrompt: null,
+  awaitingToken: null,
+  awaitingStarted: false,
   freshSessionBetweenSteps: true,
 });
+
+const newWorkflowToken = (): string =>
+  `otto-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+const checkpointLabel = (checkpoint: Checkpoint): string => {
+  const parts = [
+    `#${checkpoint.iteration}`,
+    new Date(checkpoint.timestamp).toLocaleTimeString(),
+    checkpoint.issueId ?? checkpoint.command,
+    checkpoint.action ?? checkpoint.command,
+    checkpoint.confidence,
+  ];
+
+  if (checkpoint.outcome) parts.push(checkpoint.outcome);
+  if (checkpoint.continuity !== "none") {
+    parts.push(checkpoint.continuity.replaceAll("-", " "));
+  }
+  if (checkpoint.alert) parts.push(checkpoint.alert);
+  return `${parts.join(" | ")} | ${checkpoint.summary}`;
+};
+
+const continuityLabel = (
+  continuity: ContinuityKind,
+  reason: string | null,
+): string => {
+  const base =
+    continuity === "fresh-session"
+      ? "fresh session"
+      : continuity === "same-session-compacted"
+        ? "same session (compacted)"
+        : continuity === "compaction-fallback"
+          ? "fallback after compaction failure"
+          : "none";
+
+  return reason ? `${base} - ${reason}` : base;
+};
+
+const stateAlert = (runState: RunState): string | null => {
+  if (runState.lastContinuation === "compaction-fallback") {
+    return "continuity fallback";
+  }
+
+  if (
+    runState.lastResultSource === "malformed" ||
+    runState.lastResultSource === "mismatched"
+  ) {
+    return "result drift";
+  }
+
+  if (runState.lastConfidence === "low") {
+    return "weak evidence";
+  }
+
+  if (runState.failures > 0) {
+    return `recovered failures ${runState.failures}/${runState.maxFailures}`;
+  }
+
+  return null;
+};
+
+const checkpointActionOptions = (checkpoint: Checkpoint): string[] => [
+  `Navigate here | ${checkpoint.issueId ?? checkpoint.command} | ${checkpoint.summary}`,
+  `Fork from here | ${checkpoint.issueId ?? checkpoint.command} | ${checkpoint.summary}`,
+  `Show details | ${checkpoint.action ?? checkpoint.command} | ${checkpoint.confidence}`,
+];
 
 const extractAssistantText = (messages: unknown[]): string => {
   if (!Array.isArray(messages)) return "";
@@ -224,36 +332,340 @@ const parseStartArgs = (
   return parsed;
 };
 
-const loadAutopilotPreferences = (): LoadedPreferences => {
-  const envPath = process.env.BMAD_AUTOPILOT_CONFIG?.trim();
-  const candidates = [
-    ...(envPath ? [resolve(envPath)] : []),
-    ...CONFIG_PATHS.map((filePath) => resolve(process.cwd(), filePath)),
-  ];
+const mergePreferences = (
+  base: AutopilotPreferences,
+  incoming: AutopilotPreferences,
+): AutopilotPreferences => ({
+  defaults: {
+    ...(base.defaults ?? {}),
+    ...(incoming.defaults ?? {}),
+  },
+  workflows: {
+    ...(base.workflows ?? {}),
+    ...(incoming.workflows ?? {}),
+    commandModes: {
+      ...(base.workflows?.commandModes ?? {}),
+      ...(incoming.workflows?.commandModes ?? {}),
+    },
+  },
+});
 
-  for (const filePath of candidates) {
-    if (!existsSync(filePath)) continue;
+const normalizePreferences = (
+  preferences: AutopilotPreferences,
+): AutopilotPreferences => {
+  const defaults = preferences.defaults ?? {};
+  const workflows = preferences.workflows ?? {};
+  const commandModes = Object.fromEntries(
+    Object.entries(workflows.commandModes ?? {}).filter(
+      ([, mode]) => mode === "accept-default" || mode === "party",
+    ),
+  ) as Partial<Record<WorkflowCommand, WorkflowMode>>;
+
+  const normalized: AutopilotPreferences = {};
+
+  if (Object.keys(defaults).length > 0) {
+    normalized.defaults = {
+      ...(defaults.skipInit !== undefined
+        ? { skipInit: defaults.skipInit }
+        : {}),
+      ...(defaults.maxIterations !== undefined
+        ? { maxIterations: defaults.maxIterations }
+        : {}),
+      ...(defaults.maxFailures !== undefined
+        ? { maxFailures: defaults.maxFailures }
+        : {}),
+      ...(defaults.freshSessionBetweenSteps !== undefined
+        ? { freshSessionBetweenSteps: defaults.freshSessionBetweenSteps }
+        : {}),
+    };
+  }
+
+  if (
+    workflows.defaultMode !== undefined ||
+    Object.keys(commandModes).length > 0
+  ) {
+    normalized.workflows = {
+      ...(workflows.defaultMode !== undefined
+        ? { defaultMode: workflows.defaultMode }
+        : {}),
+      ...(Object.keys(commandModes).length > 0 ? { commandModes } : {}),
+    };
+  }
+
+  return normalized;
+};
+
+const preferenceCandidates = (): PreferenceCandidate[] => {
+  const cwd = process.cwd();
+  const envPath = process.env.BMAD_AUTOPILOT_CONFIG?.trim();
+
+  return [
+    ...CONFIG_PATHS.map((filePath) => ({
+      label: filePath,
+      path: resolve(cwd, filePath),
+    })),
+    ...(envPath
+      ? [
+          {
+            label: `BMAD_AUTOPILOT_CONFIG (${envPath})`,
+            path: resolve(envPath),
+          },
+        ]
+      : []),
+  ];
+};
+
+const displayPath = (filePath: string): string => {
+  const rel = relative(process.cwd(), filePath);
+  return rel && !rel.startsWith("..") ? rel : filePath;
+};
+
+const loadAutopilotPreferences = (): LoadedPreferences => {
+  let preferences: AutopilotPreferences = {};
+  let source: string | null = null;
+  const warnings: string[] = [];
+
+  for (const candidate of preferenceCandidates()) {
+    if (!existsSync(candidate.path)) continue;
     try {
-      const raw = readFileSync(filePath, "utf8");
+      const raw = readFileSync(candidate.path, "utf8");
       const parsed = JSON.parse(raw) as AutopilotPreferences;
-      return {
-        preferences: parsed && typeof parsed === "object" ? parsed : {},
-        source: filePath,
-        error: null,
-      };
+      preferences = mergePreferences(
+        preferences,
+        parsed && typeof parsed === "object" ? parsed : {},
+      );
+      source = candidate.label;
     } catch (error) {
-      return {
-        preferences: {},
-        source: filePath,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unknown preference parse error",
-      };
+      warnings.push(
+        `${candidate.label} could not be loaded (${error instanceof Error ? error.message : "Unknown preference parse error"})`,
+      );
     }
   }
 
-  return { preferences: {}, source: null, error: null };
+  return {
+    preferences: normalizePreferences(preferences),
+    source,
+    error: warnings.length > 0 ? warnings.join("; ") : null,
+  };
+};
+
+const saveAutopilotPreferences = (
+  preferences: AutopilotPreferences,
+): { path: string; preferences: AutopilotPreferences } => {
+  const filePath = resolve(process.cwd(), PROJECT_PREFERENCES_PATH);
+  mkdirSync(resolve(process.cwd(), ".pi"), { recursive: true });
+  const normalized = normalizePreferences(preferences);
+  writeFileSync(filePath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  return { path: filePath, preferences: normalized };
+};
+
+const onboardingChoice = async <T>(
+  ctx: ExtensionCommandContext,
+  title: string,
+  choices: PreferenceChoice<T>[],
+): Promise<T | null> => {
+  const selected = await ctx.ui.select(
+    title,
+    choices.map((choice) => choice.label),
+  );
+  if (!selected) return null;
+  return choices.find((choice) => choice.label === selected)?.value ?? null;
+};
+
+const onboardingWorkflowOverride = async (
+  ctx: ExtensionCommandContext,
+  command: WorkflowCommand,
+  title: string,
+): Promise<WorkflowPreferenceOverride | null> =>
+  onboardingChoice(ctx, title, [
+    {
+      label: `Inherit default | ${command}`,
+      value: "inherit",
+    },
+    {
+      label: `Accept default | ${command}`,
+      value: "accept-default",
+    },
+    {
+      label: `Party mode | ${command}`,
+      value: "party",
+    },
+  ]);
+
+const onboardingSummary = (preferences: AutopilotPreferences): string[] => {
+  const overrides = Object.entries(preferences.workflows?.commandModes ?? {});
+  return [
+    `Skip init: ${preferences.defaults?.skipInit ? "yes" : "no"}`,
+    `Max iterations: ${preferences.defaults?.maxIterations ?? 25}`,
+    `Max failures: ${preferences.defaults?.maxFailures ?? 3}`,
+    `Fresh session between steps: ${preferences.defaults?.freshSessionBetweenSteps === false ? "no" : "yes"}`,
+    `Default mode: ${preferences.workflows?.defaultMode ?? "accept-default"}`,
+    `Overrides: ${overrides.length > 0 ? overrides.map(([command, mode]) => `${command}=${mode}`).join(", ") : "none"}`,
+  ];
+};
+
+const runOnboarding = async (
+  ctx: ExtensionCommandContext,
+): Promise<{ path: string; preferences: AutopilotPreferences } | null> => {
+  if (!ctx.hasUI) {
+    ctx.ui.notify("/bmad-auto-onboard requires interactive mode.", "error");
+    return null;
+  }
+
+  const current = loadAutopilotPreferences().preferences;
+  const profile = await onboardingChoice(ctx, "Otto profile", [
+    {
+      label: "Delivery | fresh-session, steady defaults",
+      value: {
+        defaults: {
+          skipInit: false,
+          maxIterations: 25,
+          maxFailures: 3,
+          freshSessionBetweenSteps: true,
+        },
+        workflows: {
+          defaultMode: "accept-default" as WorkflowMode,
+        },
+      },
+    },
+    {
+      label: "Balanced | longer runs, same review bar",
+      value: {
+        defaults: {
+          skipInit: false,
+          maxIterations: 40,
+          maxFailures: 4,
+          freshSessionBetweenSteps: true,
+        },
+        workflows: {
+          defaultMode: "accept-default" as WorkflowMode,
+        },
+      },
+    },
+    {
+      label: "Explore | fewer resets, more operator steering",
+      value: {
+        defaults: {
+          skipInit: true,
+          maxIterations: 15,
+          maxFailures: 5,
+          freshSessionBetweenSteps: false,
+        },
+        workflows: {
+          defaultMode: "party" as WorkflowMode,
+        },
+      },
+    },
+    {
+      label: "Current config | start from what Otto loads now",
+      value: current,
+    },
+  ]);
+  if (!profile) return null;
+
+  const skipInit = await onboardingChoice(ctx, "Initialize before looping", [
+    { label: "Run initialize first", value: false },
+    { label: "Skip initialize", value: true },
+  ]);
+  if (skipInit === null) return null;
+
+  const freshSessionBetweenSteps = await onboardingChoice(
+    ctx,
+    "Session continuity between next-step turns",
+    [
+      { label: "Fresh session between steps", value: true },
+      { label: "Stay in same session", value: false },
+    ],
+  );
+  if (freshSessionBetweenSteps === null) return null;
+
+  const maxIterations = await onboardingChoice(ctx, "Max iterations per run", [
+    { label: "10 iterations", value: 10 },
+    { label: "25 iterations", value: 25 },
+    { label: "40 iterations", value: 40 },
+    { label: "60 iterations", value: 60 },
+  ]);
+  if (maxIterations === null) return null;
+
+  const maxFailures = await onboardingChoice(
+    ctx,
+    "Max recovered failures before stopping",
+    [
+      { label: "2 failures", value: 2 },
+      { label: "3 failures", value: 3 },
+      { label: "5 failures", value: 5 },
+    ],
+  );
+  if (maxFailures === null) return null;
+
+  const defaultMode = await onboardingChoice(ctx, "Default workflow mode", [
+    {
+      label: "Accept default | Otto runs through",
+      value: "accept-default" as WorkflowMode,
+    },
+    {
+      label: "Party mode | Otto pauses at major transitions",
+      value: "party" as WorkflowMode,
+    },
+  ]);
+  if (!defaultMode) return null;
+
+  const architectureMode = await onboardingWorkflowOverride(
+    ctx,
+    "/bmad:bmm:create-architecture",
+    "Create-architecture workflow mode",
+  );
+  if (!architectureMode) return null;
+
+  const epicsMode = await onboardingWorkflowOverride(
+    ctx,
+    "/bmad:bmm:create-epics-and-stories",
+    "Create-epics-and-stories workflow mode",
+  );
+  if (!epicsMode) return null;
+
+  const validatePrdMode = await onboardingWorkflowOverride(
+    ctx,
+    "/bmad:td:validate-prd",
+    "Validate-PRD workflow mode",
+  );
+  if (!validatePrdMode) return null;
+
+  const preferences = normalizePreferences({
+    ...profile,
+    defaults: {
+      ...(profile.defaults ?? {}),
+      skipInit,
+      maxIterations,
+      maxFailures,
+      freshSessionBetweenSteps,
+    },
+    workflows: {
+      ...(profile.workflows ?? {}),
+      defaultMode,
+      commandModes: {
+        ...(architectureMode !== "inherit"
+          ? { "/bmad:bmm:create-architecture": architectureMode }
+          : {}),
+        ...(epicsMode !== "inherit"
+          ? { "/bmad:bmm:create-epics-and-stories": epicsMode }
+          : {}),
+        ...(validatePrdMode !== "inherit"
+          ? { "/bmad:td:validate-prd": validatePrdMode }
+          : {}),
+      },
+    },
+  });
+
+  const saved = saveAutopilotPreferences(preferences);
+  ctx.ui.notify(
+    [
+      `Saved Otto preferences to ${displayPath(saved.path)}.`,
+      ...onboardingSummary(saved.preferences),
+    ].join("\n"),
+    "success",
+  );
+  return saved;
 };
 
 const workflowModeFor = (
@@ -267,6 +679,7 @@ const workflowModeFor = (
 const workflowPrompt = (
   command: WorkflowCommand,
   preferences: AutopilotPreferences,
+  token: string,
 ): string => {
   const workflow =
     command === "/bmad:td:initialize"
@@ -329,8 +742,9 @@ const workflowPrompt = (
     "- Follow workflow instructions directly and perform actions, not just explain them.",
     "- Prefer accept-default behavior and avoid unnecessary prompts.",
     `- ${workflow.extra}`,
+    `- Workflow token: ${token}. Carry it through this run and include it unchanged in the final OTTO_RESULT JSON as key token.`,
     "- Report concrete actions taken, artifacts touched, and td outcomes.",
-    `- End your final response with exactly one line starting with ${RESULT_PREFIX} followed by valid single-line JSON with keys: command, action, issueId, outcome, confidence, summary.`,
+    `- End your final response with exactly one line starting with ${RESULT_PREFIX} followed by valid single-line JSON with keys: command, token, action, issueId, outcome, confidence, summary.`,
     "- Use action from: review, implementation, requirements-validation, epic-workflow, unknown.",
     "- Use outcome from: completed, blocked, needs-input, no-work, failed, unknown.",
     "- Use confidence from: high, medium, low, unknown.",
@@ -359,6 +773,7 @@ const matchesQueuedWorkflowPrompt = (
   prompt: string,
   awaitingPrompt: string | null,
   awaitingCommand: string | null,
+  awaitingToken: string | null,
 ): boolean => {
   const actual = prompt.trim();
   const expected = awaitingPrompt?.trim() ?? "";
@@ -367,6 +782,7 @@ const matchesQueuedWorkflowPrompt = (
   if (!actual) return false;
   if (expected && actual === expected) return true;
   if (command && actual === command) return true;
+  if (awaitingToken && actual.includes(awaitingToken)) return true;
 
   const workflowBanner = command ? `Execute BMAD workflow now: ${command}` : "";
   if (workflowBanner && actual.includes(workflowBanner)) return true;
@@ -381,8 +797,8 @@ const matchesQueuedWorkflowPrompt = (
 
 export default function bmadAutopilot(pi: ExtensionAPI) {
   let state = newRunState();
-  let currentPrompt = "";
   let turnHadToolError = false;
+  let onboardingHintShown = false;
 
   const persistState = (reason: string): void => {
     pi.appendEntry(STATE_ENTRY_TYPE, {
@@ -395,31 +811,46 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
   const updateUi = (ctx: ExtensionContext): void => {
     if (!ctx.hasUI) return;
 
+    const alert = stateAlert(state);
+
     const status = state.active
-      ? `Otto: ${state.phase} #${state.iteration}/${state.maxIterations}`
+      ? `Otto: ${state.lastIssueId ?? state.lastAction ?? state.phase} | ${state.phase} | ${state.lastConfidence}${alert ? ` | ${alert}` : ""}`
       : `Otto: ${state.phase}`;
 
     ctx.ui.setStatus("bmad-autopilot", status);
 
     const widgetLines = [
       `Run: ${state.runId ?? "none"}`,
+      `Current td: ${state.lastIssueId ?? "-"}`,
+      `Branch: ${state.lastAction ?? "-"}`,
+      `Why: ${state.lastDecisionReason ?? "-"}`,
+      `Mode: ${state.lastCommandMode}`,
+      `Confidence: ${state.lastConfidence}`,
+      `Continuity: ${continuityLabel(state.lastContinuation, state.lastContinuationReason)}`,
       `Phase: ${state.phase}`,
       `Iteration: ${state.iteration}/${state.maxIterations}`,
       `Failures: ${state.failures}/${state.maxFailures}`,
-      `Queue drain passes: ${state.emptyQueuePasses}`,
       `Last command: ${state.lastCommand ?? "-"}`,
-      `Last action: ${state.lastAction ?? "-"}`,
       `Last outcome: ${state.lastOutcome ?? "-"}`,
-      `Confidence: ${state.lastConfidence}`,
-      `Last issue: ${state.lastIssueId ?? "-"}`,
       `Result source: ${state.lastResultSource ?? "-"}`,
       `Queue state: ${state.queueState}`,
       `Stop code: ${state.stopCode}`,
+      `Queue drain passes: ${state.emptyQueuePasses}`,
       `Session hop: ${state.freshSessionBetweenSteps ? "on" : "off"}`,
     ];
 
+    if (alert) widgetLines.push(`Alert: ${alert}`);
     if (state.stopReason) widgetLines.push(`Reason: ${state.stopReason}`);
     ctx.ui.setWidget("bmad-autopilot", widgetLines);
+  };
+
+  const setContinuation = (
+    continuity: ContinuityKind,
+    reason: string,
+  ): void => {
+    state.lastContinuation = continuity;
+    state.lastContinuationReason = shortText(reason, 160);
+    state.lastProgressAt = Date.now();
   };
 
   const restoreState = (ctx: ExtensionContext): void => {
@@ -439,32 +870,76 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       };
     }
     updateUi(ctx);
+
+    if (onboardingHintShown || !ctx.hasUI) return;
+    const hasPreferences =
+      loadAutopilotPreferences().source !== null ||
+      branch.some(
+        (entry) =>
+          entry.type === "custom" &&
+          entry.customType === ONBOARDING_MARKER_ENTRY_TYPE &&
+          typeof entry.data === "object" &&
+          entry.data !== null &&
+          (entry.data as { version?: number }).version ===
+            ONBOARDING_MARKER_VERSION,
+      );
+    if (hasPreferences) return;
+
+    onboardingHintShown = true;
+    ctx.ui.notify(PREFERENCE_ONBOARDING_HINT, "info");
+  };
+
+  const markOnboardingHintSeen = (): void => {
+    onboardingHintShown = true;
+    pi.appendEntry(ONBOARDING_MARKER_ENTRY_TYPE, {
+      version: ONBOARDING_MARKER_VERSION,
+      seenAt: Date.now(),
+    });
   };
 
   const queueWorkflowCommand = (
     ctx: ExtensionContext,
     command: string,
+    reason = "Operator requested workflow execution.",
   ): void => {
     const { preferences, source, error } = loadAutopilotPreferences();
     if (error) {
       state.lastError = `Preference load failed (${source}): ${error}`;
     }
-    const prompt = workflowPrompt(command as WorkflowCommand, preferences);
+    const token = newWorkflowToken();
+    const prompt = workflowPrompt(
+      command as WorkflowCommand,
+      preferences,
+      token,
+    );
+    const mode = workflowModeFor(command as WorkflowCommand, preferences);
     const options = ctx.isIdle()
       ? undefined
       : { deliverAs: "followUp" as const };
     pi.sendUserMessage(prompt, options);
     state.awaitingCommand = command;
     state.awaitingPrompt = prompt;
+    state.awaitingToken = token;
+    state.awaitingStarted = false;
     state.lastCommand = command;
+    state.lastCommandMode = mode;
+    state.lastDecisionReason = shortText(reason, 160);
     state.lastProgressAt = Date.now();
     persistState(`queued:${command}`);
     updateUi(ctx);
   };
 
   const continueWithFreshSession = (ctx: ExtensionContext): void => {
+    setContinuation(
+      "fresh-session",
+      "Fresh-session mode is enabled; rotate the session before the next workflow step.",
+    );
     state.awaitingCommand = CONTINUE_COMMAND;
     state.awaitingPrompt = CONTINUE_COMMAND;
+    state.awaitingToken = null;
+    state.awaitingStarted = false;
+    state.lastCommandMode = "accept-default";
+    state.lastDecisionReason = state.lastContinuationReason;
     persistState("queue-session-hop-command");
     updateUi(ctx);
 
@@ -477,6 +952,8 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
   const compactAndQueueNextStep = (ctx: ExtensionContext): void => {
     state.awaitingCommand = null;
     state.awaitingPrompt = null;
+    state.awaitingToken = null;
+    state.awaitingStarted = false;
     persistState("compact-before-next-step");
     updateUi(ctx);
 
@@ -485,11 +962,27 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         "Preserve only concise Otto continuity: current run phase, latest td issue/action, validation status, unresolved blockers, and immediate next-step context.",
       onComplete: () => {
         if (!state.active || state.phase !== "running") return;
-        queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
+        setContinuation(
+          "same-session-compacted",
+          "Compaction completed; continue the loop in the current session.",
+        );
+        queueWorkflowCommand(
+          ctx,
+          NEXT_STEP_COMMAND,
+          "Compaction completed; continue the loop in the current session.",
+        );
       },
       onError: () => {
         if (!state.active || state.phase !== "running") return;
-        queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
+        setContinuation(
+          "compaction-fallback",
+          "Compaction fallback triggered; continue the loop without a fresh session.",
+        );
+        queueWorkflowCommand(
+          ctx,
+          NEXT_STEP_COMMAND,
+          "Compaction fallback triggered; continue the loop without a fresh session.",
+        );
       },
     });
   };
@@ -531,6 +1024,8 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     state.stopCode = stopCode;
     state.awaitingCommand = null;
     state.awaitingPrompt = null;
+    state.awaitingToken = null;
+    state.awaitingStarted = false;
     state.lastProgressAt = Date.now();
     persistState(`stop:${phase}`);
     updateUi(ctx);
@@ -575,7 +1070,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       description,
       handler: async (_args, ctx) => {
         const { preferences, source, error } = loadAutopilotPreferences();
-        const prompt = workflowPrompt(command, preferences);
+        const prompt = workflowPrompt(command, preferences, newWorkflowToken());
         const options = ctx.isIdle()
           ? undefined
           : { deliverAs: "followUp" as const };
@@ -607,16 +1102,17 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     }
   });
 
-  pi.on("agent_start", async (event, ctx) => {
-    currentPrompt = typeof event.prompt === "string" ? event.prompt.trim() : "";
+  pi.on("before_agent_start", async (event, ctx) => {
     if (!state.active) return;
     if (
       matchesQueuedWorkflowPrompt(
-        currentPrompt,
+        event.prompt,
         state.awaitingPrompt,
         state.awaitingCommand,
+        state.awaitingToken,
       )
     ) {
+      state.awaitingStarted = true;
       state.lastProgressAt = Date.now();
       updateUi(ctx);
     }
@@ -632,16 +1128,11 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     )
       return;
     if (!state.awaitingCommand) return;
-    if (
-      !matchesQueuedWorkflowPrompt(
-        currentPrompt,
-        state.awaitingPrompt,
-        state.awaitingCommand,
-      )
-    )
-      return;
+    if (!state.awaitingStarted) return;
 
     const completedCommand = state.awaitingCommand;
+    const completedToken = state.awaitingToken;
+    state.awaitingStarted = false;
 
     if (completedCommand === CONTINUE_COMMAND) {
       if (ctx.hasUI) {
@@ -658,16 +1149,27 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     const resolvedWorkflowResult = resolveWorkflowResult(
       assistantText,
       completedCommand,
+      completedToken,
     );
     const workflowResult = resolvedWorkflowResult.result;
     const summary = resolvedWorkflowResult.summary;
     const entryId = ctx.sessionManager.getLeafId();
+    const alert = stateAlert(state);
 
     if (entryId) {
       state.checkpoints.push({
         iteration: state.iteration,
         entryId,
         command: completedCommand,
+        issueId: workflowResult?.issueId ?? parseIssueId(assistantText),
+        action: workflowResult?.action ?? classifyAction(assistantText),
+        outcome: workflowResult?.outcome ?? classifyOutcome(assistantText),
+        confidence: workflowResult?.confidence ?? "unknown",
+        queueState: state.queueState,
+        continuity: state.lastContinuation,
+        continuityReason: state.lastContinuationReason,
+        alert,
+        reason: state.lastDecisionReason,
         summary,
         timestamp: Date.now(),
       });
@@ -818,7 +1320,11 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
 
       state.queueState = "drained-ready-for-validation";
       persistState("loop-run-validate-prd");
-      queueWorkflowCommand(ctx, VALIDATE_PRD_COMMAND);
+      queueWorkflowCommand(
+        ctx,
+        VALIDATE_PRD_COMMAND,
+        "Ready/reviewable work is drained; validate against the PRD and reopen any real gaps.",
+      );
       return;
     }
 
@@ -836,6 +1342,8 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
 
       state.awaitingCommand = null;
       state.awaitingPrompt = null;
+      state.awaitingToken = null;
+      state.awaitingStarted = false;
       persistState("session-hop-command-received");
       updateUi(ctx);
 
@@ -852,7 +1360,11 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
 
       persistState("session-rotated");
       updateUi(ctx);
-      queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
+      queueWorkflowCommand(
+        ctx,
+        NEXT_STEP_COMMAND,
+        "Fresh session created successfully; continue with the next-step workflow.",
+      );
     },
   });
 
@@ -961,13 +1473,21 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         lastProgressAt: now,
         awaitingCommand: initialCommand,
         awaitingPrompt: null,
+        awaitingToken: null,
+        awaitingStarted: false,
         stopCode: "none",
         queueState: skipInit ? "ready" : "unknown",
       };
 
       persistState("start");
       updateUi(ctx);
-      queueWorkflowCommand(ctx, initialCommand);
+      queueWorkflowCommand(
+        ctx,
+        initialCommand,
+        skipInit
+          ? "Skip initialize and begin directly with next-step based on existing workspace state."
+          : "Start by initializing BMAD and td context before entering the next-step loop.",
+      );
       if (source && ctx.hasUI) {
         ctx.ui.notify(
           error
@@ -980,27 +1500,57 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     },
   });
 
+  pi.registerCommand("bmad-auto-onboard", {
+    description: "Set Otto project preferences with an onboarding flow",
+    handler: async (_args, ctx: ExtensionCommandContext) => {
+      const saved = await runOnboarding(ctx);
+      if (!saved) return;
+      markOnboardingHintSeen();
+    },
+  });
+
+  pi.registerCommand("otto-onboard", {
+    description: "Alias for /bmad-auto-onboard",
+    handler: async (_args, ctx: ExtensionCommandContext) => {
+      const saved = await runOnboarding(ctx);
+      if (!saved) return;
+      markOnboardingHintSeen();
+    },
+  });
+
   pi.registerCommand("bmad-auto-status", {
     description: "Show Otto state summary",
     handler: async (_args, ctx) => {
+      const loadedPreferences = loadAutopilotPreferences();
       const status = [
         `Run: ${state.runId ?? "none"}`,
+        `Preferences: ${loadedPreferences.source ?? "built-in defaults"}`,
+        `Current td: ${state.lastIssueId ?? "-"}`,
+        `Branch: ${state.lastAction ?? "-"}`,
+        `Why: ${state.lastDecisionReason ?? "-"}`,
+        `Mode: ${state.lastCommandMode}`,
         `Phase: ${state.phase}`,
         `Active: ${state.active ? "yes" : "no"}`,
         `Iteration: ${state.iteration}/${state.maxIterations}`,
         `Failures: ${state.failures}/${state.maxFailures}`,
         `Last command: ${state.lastCommand ?? "-"}`,
-        `Last action: ${state.lastAction ?? "-"}`,
         `Last outcome: ${state.lastOutcome ?? "-"}`,
         `Confidence: ${state.lastConfidence}`,
+        `Continuity: ${continuityLabel(state.lastContinuation, state.lastContinuationReason)}`,
         `Result source: ${state.lastResultSource ?? "-"}`,
-        `Last issue: ${state.lastIssueId ?? "-"}`,
         `Queue state: ${state.queueState}`,
         `Stop code: ${state.stopCode}`,
         `Stop reason: ${state.stopReason ?? "-"}`,
       ].join("\n");
 
-      ctx.ui.notify(status, "info");
+      const detailLines = [status];
+      const alert = stateAlert(state);
+      if (alert) detailLines.push(`Alert: ${alert}`);
+      if (loadedPreferences.error) {
+        detailLines.push(`Preference warning: ${loadedPreferences.error}`);
+      }
+
+      ctx.ui.notify(detailLines.join("\n"), "info");
       updateUi(ctx);
     },
   });
@@ -1032,10 +1582,16 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       state.stopCode = "none";
       state.awaitingCommand = NEXT_STEP_COMMAND;
       state.awaitingPrompt = null;
+      state.awaitingToken = null;
+      state.awaitingStarted = false;
       persistState("resume");
       updateUi(ctx);
 
-      queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
+      queueWorkflowCommand(
+        ctx,
+        NEXT_STEP_COMMAND,
+        "Resume the loop from a paused state and continue with the next-step workflow.",
+      );
       ctx.ui.notify("Otto resumed.", "success");
     },
   });
@@ -1065,10 +1621,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       }
 
       const recent = [...state.checkpoints].reverse().slice(0, 30);
-      const options = recent.map(
-        (checkpoint) =>
-          `#${checkpoint.iteration} | ${new Date(checkpoint.timestamp).toLocaleTimeString()} | ${checkpoint.command} | ${checkpoint.summary}`,
-      );
+      const options = recent.map((checkpoint) => checkpointLabel(checkpoint));
 
       const selected = await ctx.ui.select("Otto checkpoints", options);
       if (!selected) return;
@@ -1077,13 +1630,34 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       if (index < 0) return;
       const checkpoint = recent[index];
 
-      const action = await ctx.ui.select("Checkpoint action", [
-        "Navigate here",
-        "Fork from here",
-      ]);
+      const action = await ctx.ui.select(
+        "Checkpoint action",
+        checkpointActionOptions(checkpoint),
+      );
       if (!action) return;
 
-      if (action === "Navigate here") {
+      if (action.startsWith("Show details")) {
+        ctx.ui.notify(
+          [
+            `Checkpoint: #${checkpoint.iteration}`,
+            `Time: ${new Date(checkpoint.timestamp).toLocaleString()}`,
+            `td: ${checkpoint.issueId ?? "-"}`,
+            `Command: ${checkpoint.command}`,
+            `Branch: ${checkpoint.action ?? "-"}`,
+            `Outcome: ${checkpoint.outcome ?? "-"}`,
+            `Confidence: ${checkpoint.confidence}`,
+            `Continuity: ${continuityLabel(checkpoint.continuity, checkpoint.continuityReason)}`,
+            `Queue state: ${checkpoint.queueState}`,
+            `Alert: ${checkpoint.alert ?? "-"}`,
+            `Why: ${checkpoint.reason ?? "-"}`,
+            `Summary: ${checkpoint.summary}`,
+          ].join("\n"),
+          "info",
+        );
+        return;
+      }
+
+      if (action.startsWith("Navigate here")) {
         await ctx.navigateTree(checkpoint.entryId, {
           summarize: true,
           label: `dive:${state.runId ?? "run"}:iter-${checkpoint.iteration}`,

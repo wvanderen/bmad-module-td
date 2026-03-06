@@ -7,6 +7,7 @@
     "bmad",
     "td",
     "pi",
+    "pi-package",
     "otto",
     "workflow"
   ],
@@ -23,8 +24,17 @@
   },
   "files": [
     "src",
+    "skills",
     "otto.svg"
   ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
   "scripts": {
     "sync:source": "node ../../scripts/sync-pi-autopilot.mjs",
     "prepack": "npm run sync:source",
