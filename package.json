@@ -23,8 +23,8 @@
     "sync:check": "node scripts/sync-td-integration.mjs --check --source-dir packages/bmad-module-td",
     "format:check": "prettier --check \"**/*.{js,cjs,mjs,json,yaml}\"",
     "format:fix": "prettier --write \"**/*.{js,cjs,mjs,json,yaml}\"",
-    "lint": "eslint . --ext .js,.cjs,.mjs,.yaml --max-warnings=0",
-    "lint:fix": "eslint . --ext .js,.cjs,.mjs,.yaml --fix",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
     "lint:md": "markdownlint-cli2 \"**/*.md\"",
     "pack:module": "npm pack --workspace @wvanderen/bmad-module-td",
     "release:module": "npm run release:module:patch",
@@ -57,8 +57,9 @@
     "packages/*"
   ],
   "devDependencies": {
-    "prettier": "^3.7.4",
-    "markdownlint-cli2": "^0.19.1"
+    "eslint": "^10.0.2",
+    "markdownlint-cli2": "^0.19.1",
+    "prettier": "^3.7.4"
   },
   "engines": {
     "node": ">=22.0.0"

@@ -8,24 +8,24 @@ bmad_to_td:
   backlog:
     td_status: "open"
     description: "Story exists but not yet started"
-    
+
   ready-for-dev:
     td_status: "open"
     td_label: "ready"
     description: "Story has full context, ready for implementation"
-    
+
   in-progress:
     td_status: "in_progress"
     description: "Currently being implemented"
-    
+
   review:
     td_status: "review"
     description: "Implementation complete, awaiting review"
-    
+
   done:
     td_status: "closed"
     description: "Completed and approved"
-    
+
   blocked:
     td_status: "blocked"
     description: "Cannot proceed due to external dependency"
@@ -35,19 +35,19 @@ td_to_bmad:
   open:
     bmad_status: "ready-for-dev"
     task_checkbox: "[ ]"
-    
+
   in_progress:
     bmad_status: "in-progress"
-    task_checkbox: "[ ]"  # Keep unchecked while working
-    
+    task_checkbox: "[ ]" # Keep unchecked while working
+
   review:
     bmad_status: "review"
-    task_checkbox: "[ ]"  # Keep unchecked until approved
-    
+    task_checkbox: "[ ]" # Keep unchecked until approved
+
   blocked:
     bmad_status: "blocked"
     task_checkbox: "[ ]"
-    
+
   closed:
     bmad_status: "done"
     task_checkbox: "[x]"
@@ -56,12 +56,12 @@ td_to_bmad:
 task_status:
   unchecked: "[ ]"
   checked: "[x]"
-  
+
   # td statuses for tasks
   open: "[ ]"
-  in_progress: "[ ]"  # Task being worked on
-  review: "[ ]"       # Task in review
-  closed: "[x]"       # Task complete
+  in_progress: "[ ]" # Task being worked on
+  review: "[ ]" # Task in review
+  closed: "[x]" # Task complete
 
 # Epic status mapping (for td epics representing BMAD stories)
 epic_status:
