@@ -1,6 +1,6 @@
-# pi-bmad-autopilot (workspace package)
+# Otto (workspace package)
 
-This workspace package tracks the Pi extension implementation for BMAD td autopilot.
+This workspace package tracks Otto, the Pi extension implementation for BMAD td automation.
 
 Current source of truth:
 
@@ -8,7 +8,7 @@ Current source of truth:
 
 `npm pack`/`npm publish` sync that file into `packages/pi-bmad-autopilot/src/bmad-autopilot.ts` so published installs ship the actual extension source.
 
-Autopilot also supports optional JSON preferences from `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, or `BMAD_AUTOPILOT_CONFIG`. Use `workflows.commandModes` to opt workflows like `/bmad:bmm:create-architecture` into `party` mode.
+Otto also supports optional JSON preferences from `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, or `BMAD_AUTOPILOT_CONFIG`. Use `workflows.commandModes` to opt workflows like `/bmad:bmm:create-architecture` into `party` mode.
 
 ## Publishing
 

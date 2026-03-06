@@ -324,8 +324,8 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     if (!ctx.hasUI) return;
 
     const status = state.active
-      ? `BMAD auto: ${state.phase} #${state.iteration}/${state.maxIterations}`
-      : `BMAD auto: ${state.phase}`;
+      ? `Otto: ${state.phase} #${state.iteration}/${state.maxIterations}`
+      : `Otto: ${state.phase}`;
 
     ctx.ui.setStatus("bmad-autopilot", status);
 
@@ -444,7 +444,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
 
     ctx.compact({
       customInstructions:
-        "Preserve only concise BMAD autopilot continuity: current run phase, latest td issue/action, validation status, unresolved blockers, and immediate next-step context.",
+        "Preserve only concise Otto continuity: current run phase, latest td issue/action, validation status, unresolved blockers, and immediate next-step context.",
       onComplete: () => {
         if (!state.active || state.phase !== "running") return;
         queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
@@ -496,7 +496,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     updateUi(ctx);
     if (ctx.hasUI) {
       ctx.ui.notify(
-        `BMAD autopilot ${phase}: ${reason}`,
+        `Otto ${phase}: ${reason}`,
         phase === "error" ? "error" : "info",
       );
     }
@@ -518,7 +518,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
         pi.sendUserMessage(prompt, options);
         if (error && ctx.hasUI) {
           ctx.ui.notify(
-            `BMAD autopilot preferences fallback: ${source} could not be loaded (${error})`,
+            `Otto preferences fallback: ${source} could not be loaded (${error})`,
             "warning",
           );
         }
@@ -761,10 +761,10 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
   );
 
   pi.registerCommand("bmad-auto-start", {
-    description: "Start BMAD initialize -> next-step autopilot",
+    description: "Start Otto initialize -> next-step loop",
     handler: async (args, ctx) => {
       if (state.active && state.phase !== "paused") {
-        ctx.ui.notify("Autopilot is already running.", "warning");
+        ctx.ui.notify("Otto is already running.", "warning");
         return;
       }
 
@@ -802,17 +802,17 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       if (source && ctx.hasUI) {
         ctx.ui.notify(
           error
-            ? `BMAD autopilot preferences fallback: ${source} could not be loaded (${error})`
-            : `Loaded BMAD autopilot preferences from ${source}`,
+            ? `Otto preferences fallback: ${source} could not be loaded (${error})`
+            : `Loaded Otto preferences from ${source}`,
           error ? "warning" : "info",
         );
       }
-      ctx.ui.notify("BMAD autopilot started.", "success");
+      ctx.ui.notify("Otto started.", "success");
     },
   });
 
   pi.registerCommand("bmad-auto-status", {
-    description: "Show autopilot state summary",
+    description: "Show Otto state summary",
     handler: async (_args, ctx) => {
       const status = [
         `Run: ${state.runId ?? "none"}`,
@@ -830,24 +830,24 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("bmad-auto-pause", {
-    description: "Pause autopilot after current turn",
+    description: "Pause Otto after current turn",
     handler: async (_args, ctx) => {
       if (!state.active) {
-        ctx.ui.notify("Autopilot is not running.", "warning");
+        ctx.ui.notify("Otto is not running.", "warning");
         return;
       }
       state.phase = "paused";
       persistState("pause");
       updateUi(ctx);
-      ctx.ui.notify("BMAD autopilot paused.", "info");
+      ctx.ui.notify("Otto paused.", "info");
     },
   });
 
   pi.registerCommand("bmad-auto-resume", {
-    description: "Resume autopilot loop",
+    description: "Resume Otto loop",
     handler: async (_args, ctx: ExtensionCommandContext) => {
       if (!state.active || state.phase !== "paused") {
-        ctx.ui.notify("Autopilot is not paused.", "warning");
+        ctx.ui.notify("Otto is not paused.", "warning");
         return;
       }
 
@@ -859,15 +859,15 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       updateUi(ctx);
 
       queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
-      ctx.ui.notify("BMAD autopilot resumed.", "success");
+      ctx.ui.notify("Otto resumed.", "success");
     },
   });
 
   pi.registerCommand("bmad-auto-stop", {
-    description: "Stop autopilot loop",
+    description: "Stop Otto loop",
     handler: async (args, ctx) => {
       if (!state.active) {
-        ctx.ui.notify("Autopilot is not running.", "warning");
+        ctx.ui.notify("Otto is not running.", "warning");
         return;
       }
       const reason = args.trim() || "Stopped manually.";
@@ -876,14 +876,14 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("bmad-auto-dive", {
-    description: "Navigate or fork at an autopilot checkpoint",
+    description: "Navigate or fork at an Otto checkpoint",
     handler: async (_args, ctx: ExtensionCommandContext) => {
       if (!ctx.hasUI) {
         ctx.ui.notify("/bmad-auto-dive requires interactive mode.", "error");
         return;
       }
       if (state.checkpoints.length === 0) {
-        ctx.ui.notify("No autopilot checkpoints available.", "warning");
+        ctx.ui.notify("No Otto checkpoints available.", "warning");
         return;
       }
 
@@ -893,7 +893,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
           `#${checkpoint.iteration} | ${new Date(checkpoint.timestamp).toLocaleTimeString()} | ${checkpoint.command} | ${checkpoint.summary}`,
       );
 
-      const selected = await ctx.ui.select("Autopilot checkpoints", options);
+      const selected = await ctx.ui.select("Otto checkpoints", options);
       if (!selected) return;
 
       const index = options.indexOf(selected);

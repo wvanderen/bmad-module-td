@@ -3,7 +3,7 @@
 ## Package Boundaries
 
 - `@wvanderen/bmad-module-td` (`packages/bmad-module-td`): BMAD td-integration module content.
-- `@wvanderen/pi-bmad-autopilot` (`packages/pi-bmad-autopilot`): Pi extension workspace package.
+- `@wvanderen/pi-bmad-autopilot` (`packages/pi-bmad-autopilot`): Otto workspace package for Pi.
 
 ## Source of Truth
 
@@ -21,7 +21,7 @@
 1. Update module source.
 2. Run `npm run sync:module`.
 3. Reinstall module into sandbox with `npx bmad-method install --custom-content <repo>/packages/bmad-module-td --action update --yes`.
-4. Reload Pi extension and run bounded autopilot test.
+4. Reload the Pi extension and run a bounded Otto test.
 
 ## Release Flow
 

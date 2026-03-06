@@ -1,6 +1,6 @@
-# BMAD Autopilot Extension (Local Prototype)
+# Otto Extension (Local Prototype)
 
-This extension adds a lightweight autopilot loop to Pi for BMAD + td workflows:
+Otto adds a lightweight automation loop to Pi for BMAD + td workflows:
 
 1. Runs `/bmad:td:initialize` once (optional)
 2. Repeats `/bmad:td:next-step`
@@ -46,7 +46,7 @@ Then run `/reload` in Pi.
 
 ## Preferences
 
-Autopilot can load optional JSON preferences from either `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, or the path in `BMAD_AUTOPILOT_CONFIG`.
+Otto can load optional JSON preferences from either `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, or the path in `BMAD_AUTOPILOT_CONFIG`.
 
 Example:
 
@@ -73,7 +73,7 @@ Example:
 
 - Checkpoints are labeled in the session tree as `auto:<runId>:iter-<N>`.
 - `/bmad-auto-dive` can either navigate to a checkpoint or fork from it.
-- Autopilot stops when no reviewable/ready td issues remain, max iterations are hit, or failure budget is exhausted.
-- By default, autopilot hops to a fresh session between `next-step` iterations. Use `--same-session` to disable.
-- If the runtime treats `/bmad-auto-continue` as plain text, autopilot falls back to same-session compacted continuation for that cycle.
-- When only `in-review` issues remain, autopilot continues with a session hop (default mode) to allow cross-session review separation.
+- Otto stops when no reviewable/ready td issues remain, max iterations are hit, or failure budget is exhausted.
+- By default, Otto hops to a fresh session between `next-step` iterations. Use `--same-session` to disable.
+- If the runtime treats `/bmad-auto-continue` as plain text, Otto falls back to same-session compacted continuation for that cycle.
+- When only `in-review` issues remain, Otto continues with a session hop (default mode) to allow cross-session review separation.
