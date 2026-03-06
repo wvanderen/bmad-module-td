@@ -50,3 +50,4 @@ Then run `/reload` in Pi.
 - `/bmad-auto-dive` can either navigate to a checkpoint or fork from it.
 - Autopilot stops when no reviewable/ready td issues remain, max iterations are hit, or failure budget is exhausted.
 - By default, autopilot hops to a fresh session between `next-step` iterations. Use `--same-session` to disable.
+- If the runtime treats `/bmad-auto-continue` as plain text, autopilot falls back to same-session compacted continuation for that cycle.

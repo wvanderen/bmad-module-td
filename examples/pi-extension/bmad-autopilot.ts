@@ -6,6 +6,7 @@ import type {
 
 const INIT_COMMAND = "/bmad:td:initialize";
 const NEXT_STEP_COMMAND = "/bmad:td:next-step";
+const CONTINUE_COMMAND = "/bmad-auto-continue";
 const STATE_ENTRY_TYPE = "bmad-autopilot-state";
 
 type Phase =
@@ -306,14 +307,14 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
   };
 
   const continueWithFreshSession = (ctx: ExtensionContext): void => {
-    state.awaitingCommand = null;
+    state.awaitingCommand = CONTINUE_COMMAND;
     persistState("queue-session-hop");
     updateUi(ctx);
 
     const options = ctx.isIdle()
       ? undefined
       : { deliverAs: "followUp" as const };
-    pi.sendUserMessage("/bmad-auto-continue", options);
+    pi.sendUserMessage(CONTINUE_COMMAND, options);
   };
 
   const compactAndQueueNextStep = (ctx: ExtensionContext): void => {
@@ -435,6 +436,17 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
 
     const completedCommand = state.awaitingCommand;
 
+    if (completedCommand === CONTINUE_COMMAND) {
+      if (ctx.hasUI) {
+        ctx.ui.notify(
+          "Session-hop command was interpreted as a prompt; falling back to same-session compacted iteration.",
+          "warning",
+        );
+      }
+      compactAndQueueNextStep(ctx);
+      return;
+    }
+
     const assistantText = extractAssistantText(event.messages as unknown[]);
     const summary = shortText(assistantText || "No assistant summary.");
     const entryId = ctx.sessionManager.getLeafId();
@@ -524,6 +536,10 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     description: "Internal: continue autopilot in fresh session",
     handler: async (_args, ctx: ExtensionCommandContext) => {
       if (!state.active || state.phase !== "running") return;
+
+      state.awaitingCommand = null;
+      persistState("session-hop-command-received");
+      updateUi(ctx);
 
       const result = await ctx.newSession();
       if (result.cancelled) {
