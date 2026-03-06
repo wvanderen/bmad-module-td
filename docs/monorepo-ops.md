@@ -25,7 +25,11 @@
 
 ## Release Flow
 
-1. Ensure tests pass: `npm test`.
-2. Bump module version: `npm run release:module:patch` (or minor/major).
-3. Publish module: `npm run publish:module`.
+1. Validate publish flow: `npm run release:check`.
+2. Bump the target package version:
+   - module: `npm run release:module:patch` (or minor/major/prerelease)
+   - autopilot: `npm run release:autopilot:patch` (or minor/major/prerelease)
+3. Publish the target package:
+   - module: `npm run publish:module`
+   - autopilot: `npm run publish:autopilot`
 4. Push commit and tags manually.

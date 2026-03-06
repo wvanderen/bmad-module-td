@@ -155,6 +155,9 @@ It provides an autopilot loop for `/bmad:td:initialize -> /bmad:td:next-step`, w
 ## Publishing
 
 ```bash
+# Validate both workspace packages before release/CI
+npm run release:check
+
 # Bump module package version (choose one)
 npm run release:module:patch
 npm run release:module:minor
@@ -165,6 +168,17 @@ npm run publish:module
 
 # One-step bump + publish
 npm run release:module:patch:publish
+
+# Bump autopilot package version (choose one)
+npm run release:autopilot:patch
+npm run release:autopilot:minor
+npm run release:autopilot:major
+
+# Publish autopilot package
+npm run publish:autopilot
+
+# One-step bump + publish
+npm run release:autopilot:patch:publish
 ```
 
 ## License

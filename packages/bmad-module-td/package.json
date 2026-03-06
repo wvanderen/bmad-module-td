@@ -26,12 +26,14 @@
     "lint": "eslint . --ext .js,.cjs,.mjs,.yaml --max-warnings=0",
     "lint:fix": "eslint . --ext .js,.cjs,.mjs,.yaml --fix",
     "lint:md": "markdownlint-cli2 \"**/*.md\"",
+    "pack": "npm pack",
     "release": "npm run release:patch",
     "release:major": "npm version major",
     "release:minor": "npm version minor",
     "release:patch": "npm version patch",
     "release:prerelease": "npm version prerelease",
     "publish:package": "npm publish --access public",
+    "publish:check": "npm pack --dry-run",
     "test": "npm run sync:check && npm run lint && npm run format:check"
   },
   "devDependencies": {

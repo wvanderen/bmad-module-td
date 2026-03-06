@@ -152,6 +152,9 @@ It provides an autopilot loop for `/bmad:td:initialize -> /bmad:td:next-step`, w
 ## Publishing
 
 ```bash
+# Validate the package tarball before publishing
+npm run publish:check
+
 # Patch release
 npm run release
 
@@ -160,6 +163,9 @@ npm run release:minor
 
 # Major release
 npm run release:major
+
+# Publish package
+npm run publish:package
 ```
 
 ## License

@@ -1,13 +1,43 @@
 {
+  "$schema": "https://json.schemastore.org/package.json",
   "name": "@wvanderen/pi-bmad-autopilot",
   "version": "0.0.1",
-  "private": true,
   "description": "Pi extension wrappers and autopilot loop for BMAD td workflows",
+  "keywords": [
+    "bmad",
+    "td",
+    "pi",
+    "autopilot",
+    "workflow"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bmad-code-org/bmad-module-td.git"
+  },
+  "license": "MIT",
+  "author": "BMad Method",
   "type": "module",
+  "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
   },
   "files": [
     "src"
-  ]
+  ],
+  "scripts": {
+    "pack": "npm pack",
+    "release": "npm run release:patch",
+    "release:major": "npm version major",
+    "release:minor": "npm version minor",
+    "release:patch": "npm version patch",
+    "release:prerelease": "npm version prerelease",
+    "publish:package": "npm publish --access public",
+    "publish:check": "npm pack --dry-run"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }
