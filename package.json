@@ -18,6 +18,7 @@
   "author": "BMad Method",
   "private": true,
   "scripts": {
+    "score:dry-run": "node scripts/score-dry-run.mjs",
     "sync:module": "node scripts/sync-td-integration.mjs --source-dir packages/bmad-module-td",
     "sync:check": "node scripts/sync-td-integration.mjs --check --source-dir packages/bmad-module-td",
     "format:check": "prettier --check \"**/*.{js,cjs,mjs,json,yaml}\"",

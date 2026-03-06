@@ -1,0 +1,71 @@
+{
+  "run": {
+    "id": "family-ops-hub-dry-run-001",
+    "date": "2026-03-06",
+    "model": "openai/gpt-5.4",
+    "loopSettings": {
+      "maxCyclesAllowed": 12,
+      "actualCyclesUsed": 8,
+      "freshSessionBetweenSteps": true
+    },
+    "humanInterventions": 1,
+    "sessionDivesUsed": 2,
+    "finalStatus": "completed"
+  },
+  "metrics": {
+    "feedbackCount": 2,
+    "avoidableFeedbackCount": 1,
+    "cycleCount": 8,
+    "reworkCount": 1,
+    "majorDriftIncidents": 0,
+    "criticalContradictionIncidents": 0
+  },
+  "sections": {
+    "productUnderstanding": 17,
+    "architectureQuality": 16,
+    "storyBacklogQuality": 18,
+    "autonomousLoopBehavior": 17,
+    "extensionUxObservability": 8,
+    "finalOutputCoherence": 9
+  },
+  "flags": {
+    "majorScopeDrift": false,
+    "architectureIgnoredLocalFirst": false,
+    "storiesNotImplementationTestable": false,
+    "nonAutonomousFeedbackFailure": false,
+    "dependencyOrderingIssues": false
+  },
+  "cycles": [
+    {
+      "cycle": 1,
+      "workflowStage": "create-architecture",
+      "primaryArtifact": "architecture.md",
+      "progressSummary": "Captured local-first architecture and sync risks.",
+      "feedbackRequested": false,
+      "feedbackNecessary": false,
+      "driftDetected": false,
+      "rework": false,
+      "score": 9
+    },
+    {
+      "cycle": 2,
+      "workflowStage": "create-epics-and-stories",
+      "primaryArtifact": "stories.md",
+      "progressSummary": "Split MVP into dependency-aware stories.",
+      "feedbackRequested": true,
+      "feedbackNecessary": true,
+      "driftDetected": false,
+      "rework": false,
+      "score": 8
+    }
+  ],
+  "notes": {
+    "bestDecisionMade": "Handled offline and sync constraints as first-class requirements.",
+    "worstDecisionMade": "Needed one extra feedback loop to settle reminder visibility.",
+    "firstPointWhereDriftAppeared": null,
+    "biggestPlaceHumanInterventionWouldHaveHelped": "Conflict resolution UX examples.",
+    "biggestPlaceHumanInterventionShouldNotHaveBeenNeeded": null,
+    "wouldTrustOnSecondProject": true,
+    "tags": ["cross-cutting-blindness"]
+  }
+}
