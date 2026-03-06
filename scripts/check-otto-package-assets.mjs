@@ -3,14 +3,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const rootDir = resolve(import.meta.dirname, "..");
-const packageJsonPath = resolve(
-  rootDir,
-  "packages/pi-bmad-autopilot/package.json",
-);
-const skillPath = resolve(
-  rootDir,
-  "packages/pi-bmad-autopilot/skills/otto/SKILL.md",
-);
+const packageJsonPath = resolve(rootDir, "packages/otto/package.json");
+const skillPath = resolve(rootDir, "packages/otto/skills/otto/SKILL.md");
 
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
 

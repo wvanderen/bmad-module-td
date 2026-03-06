@@ -124,7 +124,7 @@ Refs: {td_issue_id}
 ### Workspace Layout
 
 - `.`: BMAD td module package source (publishable)
-- `packages/pi-bmad-autopilot`: Otto workspace package for Pi (`@wvanderen/otto`)
+- `packages/otto`: Otto workspace package for Pi (`@wvanderen/otto`)
 - `examples/pi-extension`: extension file used for local Pi installation
 
 Operational details: `docs/monorepo-ops.md`
@@ -154,7 +154,7 @@ npm test
 
 This repository includes Otto, a local Pi extension prototype for autonomous BMAD execution:
 
-- `examples/pi-extension/bmad-autopilot.ts`
+- `examples/pi-extension/otto.ts`
 - `examples/pi-extension/README.md`
 
 It provides an automation loop for `/bmad:td:initialize -> /bmad:td:next-step`, workflow monitoring, and checkpoint-based session dive tools.

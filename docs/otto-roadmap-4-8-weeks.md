@@ -178,7 +178,7 @@ Outcomes:
 
 Priority work:
 
-- simplify source-of-truth and packaging flow between `examples/pi-extension/bmad-autopilot.ts` and `packages/pi-bmad-autopilot/src/bmad-autopilot.ts`
+- simplify source-of-truth and packaging flow between `examples/pi-extension/otto.ts` and `packages/otto/src/otto.ts`
 - improve installation and compatibility docs
 - reduce path and environment assumptions where possible
 - clarify release quality expectations for external adopters

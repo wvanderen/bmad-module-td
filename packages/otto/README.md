@@ -60,7 +60,7 @@ That means passing tests can support a claim, but they should not outweigh weak 
 Otto currently provides:
 
 - automation around `/bmad:td:initialize`, `/bmad:td:next-step`, and `/bmad:td:validate-prd`
-- an onboarding flow via `/bmad-auto-onboard` for project-wide Otto preferences
+- an onboarding flow via `/otto-onboard` for project-wide Otto preferences
 - workflow wrappers for BMAD planning, execution, and review flows
 - failure budgets, checkpoints, run state, and monitoring for longer loops
 - fresh-session continuation tools such as dive, fork, and session hopping
@@ -70,12 +70,15 @@ Otto currently provides:
 
 ## Configuration
 
-Run `/bmad-auto-onboard` to save project-wide Otto preferences into `.pi/bmad-autopilot.json`.
+Run `/otto-onboard` to save project-wide Otto preferences into `.pi/otto.json`.
 
 Otto reads optional JSON preferences from, in increasing precedence:
 
+- `.otto.json`
+- `.pi/otto.json`
 - `.bmad-autopilot.json`
 - `.pi/bmad-autopilot.json`
+- `OTTO_CONFIG`
 - `BMAD_AUTOPILOT_CONFIG`
 
 Use `workflows.commandModes` to opt specific workflows into `party` mode, for example:
@@ -89,13 +92,13 @@ This supports mixed autonomy rather than one fixed control philosophy.
 
 Current source of truth:
 
-- `examples/pi-extension/bmad-autopilot.ts`
+- `examples/pi-extension/otto.ts`
 - `examples/pi-extension/skills/otto/SKILL.md`
 
 Before `npm pack` or `npm publish`, the package sync step copies that source into:
 
-- `packages/pi-bmad-autopilot/src/bmad-autopilot.ts`
-- `packages/pi-bmad-autopilot/skills/otto/SKILL.md`
+- `packages/otto/src/otto.ts`
+- `packages/otto/skills/otto/SKILL.md`
 
 That keeps local Pi iteration centered on the example extension while still shipping the real source in the published Otto package.
 

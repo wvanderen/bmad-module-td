@@ -20,21 +20,21 @@ Otto is a Pi-native operating layer for BMAD + td execution. It helps agents and
 
 Before long autonomous runs, prefer a project-local Otto setup:
 
-1. Run `/bmad-auto-onboard`.
-2. Save project preferences into `.pi/bmad-autopilot.json`.
+1. Run `/otto-onboard`.
+2. Save project preferences into `.pi/otto.json`.
 3. Use those preferences as the default operating posture for later runs.
 
-Otto still supports `.bmad-autopilot.json` and `BMAD_AUTOPILOT_CONFIG`, but `.pi/bmad-autopilot.json` is the preferred project-wide home.
+Otto prefers `.pi/otto.json` and `OTTO_CONFIG`, while still supporting `.bmad-autopilot.json` and `BMAD_AUTOPILOT_CONFIG` for compatibility.
 
 ## Core Commands
 
-- `/bmad-auto-onboard` - set Otto project preferences
-- `/bmad-auto-start` - start the initialize -> next-step loop
-- `/bmad-auto-status` - inspect current run state and preference source
-- `/bmad-auto-pause` - pause after the current turn
-- `/bmad-auto-resume` - continue a paused loop
-- `/bmad-auto-stop` - stop the current loop
-- `/bmad-auto-dive` - inspect or fork from a checkpoint
+- `/otto-onboard` - set Otto project preferences
+- `/otto-start` - start the initialize -> next-step loop
+- `/otto-status` - inspect current run state and preference source
+- `/otto-pause` - pause after the current turn
+- `/otto-resume` - continue a paused loop
+- `/otto-stop` - stop the current loop
+- `/otto-dive` - inspect or fork from a checkpoint
 
 ## Operating Guidance
 

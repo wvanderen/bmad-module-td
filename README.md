@@ -3,7 +3,7 @@
 Monorepo for:
 
 - `packages/bmad-module-td` - BMAD td-integration module
-- `packages/pi-bmad-autopilot` - Otto, the Pi extension for autonomous BMAD execution
+- `packages/otto` - Otto, the Pi extension for autonomous BMAD execution
 
 ## Overview
 
@@ -127,7 +127,7 @@ Refs: {td_issue_id}
 ### Workspace Layout
 
 - `packages/bmad-module-td`: BMAD td module source (publishable)
-- `packages/pi-bmad-autopilot`: Otto workspace package for Pi (`@wvanderen/otto`)
+- `packages/otto`: Otto workspace package for Pi (`@wvanderen/otto`)
 - `examples/pi-extension`: local extension fixture for Pi
 
 Operational details: `docs/monorepo-ops.md`
@@ -157,8 +157,8 @@ npm test
 
 This repository includes Otto, a Pi-native operating layer for BMAD + td execution:
 
-- `packages/pi-bmad-autopilot`
-- `examples/pi-extension/bmad-autopilot.ts`
+- `packages/otto`
+- `examples/pi-extension/otto.ts`
 - `examples/pi-extension/README.md`
 
 Otto is built for developer AI power users who already work fluently inside coding agents and want the next real jump in velocity.
@@ -174,11 +174,11 @@ What Otto is optimized for:
 Current Otto capabilities include:
 
 - an automation loop for `/bmad:td:initialize -> /bmad:td:next-step -> /bmad:td:validate-prd`
-- a Pi onboarding flow via `/bmad-auto-onboard` that writes project-wide Otto preferences
+- a Pi onboarding flow via `/otto-onboard` that writes project-wide Otto preferences
 - workflow wrappers for BMAD planning and review flows
 - workflow monitoring, failure budgets, and persisted run state
 - fresh-session continuation with checkpoint-based dive and fork tools
-- layered JSON preferences from `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, and `BMAD_AUTOPILOT_CONFIG`
+- layered JSON preferences from `.otto.json`, `.pi/otto.json`, legacy autopilot config files, and `OTTO_CONFIG`/`BMAD_AUTOPILOT_CONFIG`
 - per-workflow execution modes such as `party` for higher-steering workflows
 - a packaged `otto` SKILL resource for Pi agents
 
@@ -205,16 +205,16 @@ npm run publish:module
 # One-step bump + publish
 npm run release:module:patch:publish
 
-# Bump autopilot package version (choose one)
-npm run release:autopilot:patch
-npm run release:autopilot:minor
-npm run release:autopilot:major
+# Bump Otto package version (choose one)
+npm run release:otto:patch
+npm run release:otto:minor
+npm run release:otto:major
 
-# Publish autopilot package
-npm run publish:autopilot
+# Publish Otto package
+npm run publish:otto
 
 # One-step bump + publish
-npm run release:autopilot:patch:publish
+npm run release:otto:patch:publish
 ```
 
 ## License

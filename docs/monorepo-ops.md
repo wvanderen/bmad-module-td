@@ -3,7 +3,7 @@
 ## Package Boundaries
 
 - `@wvanderen/bmad-module-td` (`packages/bmad-module-td`): BMAD td-integration module content.
-- `@wvanderen/otto` (`packages/pi-bmad-autopilot`): Otto workspace package for Pi.
+- `@wvanderen/otto` (`packages/otto`): Otto workspace package for Pi.
 
 ## Source of Truth
 
@@ -28,8 +28,8 @@
 1. Validate publish flow: `npm run release:check`.
 2. Bump the target package version:
    - module: `npm run release:module:patch` (or minor/major/prerelease)
-   - autopilot: `npm run release:autopilot:patch` (or minor/major/prerelease)
+   - Otto: `npm run release:otto:patch` (or minor/major/prerelease)
 3. Publish the target package:
    - module: `npm run publish:module`
-   - autopilot: `npm run publish:autopilot`
+   - Otto: `npm run publish:otto`
 4. Push commit and tags manually.

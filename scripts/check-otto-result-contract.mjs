@@ -11,13 +11,14 @@ import {
 
 const validText = [
   "Completed td-123abc and queued review.",
-  'OTTO_RESULT {"command":"/bmad:td:next-step","action":"review","issueId":"td-123abc","outcome":"completed","confidence":"high","summary":"Completed td-123abc and queued review."}',
+  'OTTO_RESULT {"command":"/bmad:td:next-step","token":"otto-test-token","action":"review","issueId":"td-123abc","outcome":"completed","confidence":"high","summary":"Completed td-123abc and queued review."}',
 ].join("\n");
 
 const validParsed = parseWorkflowResult(validText);
 assert.equal(validParsed.malformed, false);
 assert.deepEqual(validParsed.result, {
   command: "/bmad:td:next-step",
+  token: "otto-test-token",
   action: "review",
   issueId: "td-123abc",
   outcome: "completed",
@@ -29,6 +30,15 @@ const mismatched = resolveWorkflowResult(validText, "/bmad:td:validate-prd");
 assert.equal(mismatched.resultSource, "mismatched");
 assert.equal(mismatched.result, null);
 assert.match(mismatched.error ?? "", /command mismatch/);
+
+const mismatchedToken = resolveWorkflowResult(
+  validText,
+  "/bmad:td:next-step",
+  "otto-other-token",
+);
+assert.equal(mismatchedToken.resultSource, "mismatched");
+assert.equal(mismatchedToken.result, null);
+assert.match(mismatchedToken.error ?? "", /token mismatch/);
 
 const malformed = resolveWorkflowResult(
   'OTTO_RESULT {"command": }',

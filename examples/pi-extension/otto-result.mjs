@@ -106,12 +106,17 @@ export const parseWorkflowResult = (assistantText) => {
       /\btd-[a-z0-9]+\b/i.test(parsed.issueId)
         ? (parsed.issueId.match(/\btd-[a-z0-9]+\b/i)?.[0] ?? null)
         : null;
+    const token =
+      typeof parsed.token === "string" && parsed.token.trim().length > 0
+        ? parsed.token.trim()
+        : null;
 
     return {
       result:
         typeof parsed.command === "string" && parsed.command.trim().length > 0
           ? {
               command: parsed.command,
+              token,
               action,
               issueId,
               outcome,
@@ -126,7 +131,11 @@ export const parseWorkflowResult = (assistantText) => {
   }
 };
 
-export const resolveWorkflowResult = (assistantText, completedCommand) => {
+export const resolveWorkflowResult = (
+  assistantText,
+  completedCommand,
+  expectedToken = null,
+) => {
   const parsedWorkflowResult = parseWorkflowResult(assistantText);
 
   if (parsedWorkflowResult.malformed) {
@@ -144,6 +153,19 @@ export const resolveWorkflowResult = (assistantText, completedCommand) => {
         result: null,
         resultSource: "mismatched",
         error: `OTTO_RESULT command mismatch: expected ${completedCommand}, got ${parsedWorkflowResult.result.command}.`,
+        summary: parsedWorkflowResult.result.summary,
+      };
+    }
+
+    if (
+      expectedToken &&
+      parsedWorkflowResult.result.token &&
+      parsedWorkflowResult.result.token !== expectedToken
+    ) {
+      return {
+        result: null,
+        resultSource: "mismatched",
+        error: `OTTO_RESULT token mismatch: expected ${expectedToken}, got ${parsedWorkflowResult.result.token}.`,
         summary: parsedWorkflowResult.result.summary,
       };
     }

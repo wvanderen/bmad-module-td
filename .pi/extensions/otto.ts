@@ -10,8 +10,8 @@ import type {
 const INIT_COMMAND = "/bmad:td:initialize";
 const NEXT_STEP_COMMAND = "/bmad:td:next-step";
 const VALIDATE_PRD_COMMAND = "/bmad:td:validate-prd";
-const CONTINUE_COMMAND = "/bmad-auto-continue";
-const STATE_ENTRY_TYPE = "bmad-autopilot-state";
+const CONTINUE_COMMAND = "/otto-continue";
+const STATE_ENTRY_TYPE = "otto-state";
 
 type WorkflowCommand =
   | "/bmad:td:initialize"
@@ -43,7 +43,12 @@ interface LoadedPreferences {
   error: string | null;
 }
 
-const CONFIG_PATHS = [".bmad-autopilot.json", ".pi/bmad-autopilot.json"];
+const CONFIG_PATHS = [
+  ".otto.json",
+  ".pi/otto.json",
+  ".bmad-autopilot.json",
+  ".pi/bmad-autopilot.json",
+];
 
 type Phase =
   | "idle"
@@ -81,6 +86,8 @@ interface RunState {
   checkpoints: Checkpoint[];
   awaitingCommand: string | null;
   awaitingPrompt: string | null;
+  awaitingToken: string | null;
+  awaitingStarted: boolean;
   freshSessionBetweenSteps: boolean;
 }
 
@@ -103,8 +110,13 @@ const newRunState = (): RunState => ({
   checkpoints: [],
   awaitingCommand: null,
   awaitingPrompt: null,
+  awaitingToken: null,
+  awaitingStarted: false,
   freshSessionBetweenSteps: true,
 });
+
+const newWorkflowToken = (): string =>
+  `otto-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 const shortText = (text: string, max = 120): string => {
   const squashed = text.replace(/\s+/g, " ").trim();
@@ -195,7 +207,9 @@ const parseStartArgs = (
 };
 
 const loadAutopilotPreferences = (): LoadedPreferences => {
-  const envPath = process.env.BMAD_AUTOPILOT_CONFIG?.trim();
+  const envPath =
+    process.env.OTTO_CONFIG?.trim() ??
+    process.env.BMAD_AUTOPILOT_CONFIG?.trim();
   const candidates = [
     ...(envPath ? [resolve(envPath)] : []),
     ...CONFIG_PATHS.map((filePath) => resolve(process.cwd(), filePath)),
@@ -237,6 +251,7 @@ const workflowModeFor = (
 const workflowPrompt = (
   command: WorkflowCommand,
   preferences: AutopilotPreferences,
+  token: string,
 ): string => {
   const workflow =
     command === "/bmad:td:initialize"
@@ -299,6 +314,7 @@ const workflowPrompt = (
     "- Follow workflow instructions directly and perform actions, not just explain them.",
     "- Prefer accept-default behavior and avoid unnecessary prompts.",
     `- ${workflow.extra}`,
+    `- Workflow token: ${token}. Keep it intact if you reference this run in your response.`,
     "- Report concrete actions taken, artifacts touched, and td outcomes.",
   ];
 
@@ -325,6 +341,7 @@ const matchesQueuedWorkflowPrompt = (
   prompt: string,
   awaitingPrompt: string | null,
   awaitingCommand: string | null,
+  awaitingToken: string | null,
 ): boolean => {
   const actual = prompt.trim();
   const expected = awaitingPrompt?.trim() ?? "";
@@ -333,6 +350,7 @@ const matchesQueuedWorkflowPrompt = (
   if (!actual) return false;
   if (expected && actual === expected) return true;
   if (command && actual === command) return true;
+  if (awaitingToken && actual.includes(awaitingToken)) return true;
 
   const workflowBanner = command ? `Execute BMAD workflow now: ${command}` : "";
   if (workflowBanner && actual.includes(workflowBanner)) return true;
@@ -345,9 +363,8 @@ const matchesQueuedWorkflowPrompt = (
   return false;
 };
 
-export default function bmadAutopilot(pi: ExtensionAPI) {
+export default function otto(pi: ExtensionAPI) {
   let state = newRunState();
-  let currentPrompt = "";
   let turnHadToolError = false;
 
   const persistState = (reason: string): void => {
@@ -365,7 +382,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       ? `Otto: ${state.phase} #${state.iteration}/${state.maxIterations}`
       : `Otto: ${state.phase}`;
 
-    ctx.ui.setStatus("bmad-autopilot", status);
+    ctx.ui.setStatus("otto", status);
 
     const widgetLines = [
       `Run: ${state.runId ?? "none"}`,
@@ -380,7 +397,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     ];
 
     if (state.stopReason) widgetLines.push(`Reason: ${state.stopReason}`);
-    ctx.ui.setWidget("bmad-autopilot", widgetLines);
+    ctx.ui.setWidget("otto", widgetLines);
   };
 
   const restoreState = (ctx: ExtensionContext): void => {
@@ -410,13 +427,20 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     if (error) {
       state.lastError = `Preference load failed (${source}): ${error}`;
     }
-    const prompt = workflowPrompt(command as WorkflowCommand, preferences);
+    const token = newWorkflowToken();
+    const prompt = workflowPrompt(
+      command as WorkflowCommand,
+      preferences,
+      token,
+    );
     const options = ctx.isIdle()
       ? undefined
       : { deliverAs: "followUp" as const };
     pi.sendUserMessage(prompt, options);
     state.awaitingCommand = command;
     state.awaitingPrompt = prompt;
+    state.awaitingToken = token;
+    state.awaitingStarted = false;
     state.lastCommand = command;
     state.lastProgressAt = Date.now();
     persistState(`queued:${command}`);
@@ -433,6 +457,8 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     if (typeof maybeNewSession === "function") {
       state.awaitingCommand = null;
       state.awaitingPrompt = null;
+      state.awaitingToken = null;
+      state.awaitingStarted = false;
       persistState("direct-session-hop-attempt");
       updateUi(ctx);
 
@@ -452,6 +478,8 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
           if (!state.active || state.phase !== "running") return;
           state.awaitingCommand = CONTINUE_COMMAND;
           state.awaitingPrompt = CONTINUE_COMMAND;
+          state.awaitingToken = null;
+          state.awaitingStarted = false;
           persistState("queue-session-hop-fallback-command");
           updateUi(ctx);
 
@@ -466,6 +494,8 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
 
     state.awaitingCommand = CONTINUE_COMMAND;
     state.awaitingPrompt = CONTINUE_COMMAND;
+    state.awaitingToken = null;
+    state.awaitingStarted = false;
     persistState("queue-session-hop");
     updateUi(ctx);
 
@@ -478,6 +508,8 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
   const compactAndQueueNextStep = (ctx: ExtensionContext): void => {
     state.awaitingCommand = null;
     state.awaitingPrompt = null;
+    state.awaitingToken = null;
+    state.awaitingStarted = false;
     persistState("compact-before-next-step");
     updateUi(ctx);
 
@@ -530,6 +562,8 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     state.stopReason = reason;
     state.awaitingCommand = null;
     state.awaitingPrompt = null;
+    state.awaitingToken = null;
+    state.awaitingStarted = false;
     state.lastProgressAt = Date.now();
     persistState(`stop:${phase}`);
     updateUi(ctx);
@@ -550,7 +584,7 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       description,
       handler: async (_args, ctx) => {
         const { preferences, source, error } = loadAutopilotPreferences();
-        const prompt = workflowPrompt(command, preferences);
+        const prompt = workflowPrompt(command, preferences, newWorkflowToken());
         const options = ctx.isIdle()
           ? undefined
           : { deliverAs: "followUp" as const };
@@ -582,16 +616,17 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     }
   });
 
-  pi.on("agent_start", async (event, ctx) => {
-    currentPrompt = typeof event.prompt === "string" ? event.prompt.trim() : "";
+  pi.on("before_agent_start", async (event, ctx) => {
     if (!state.active) return;
     if (
       matchesQueuedWorkflowPrompt(
-        currentPrompt,
+        event.prompt,
         state.awaitingPrompt,
         state.awaitingCommand,
+        state.awaitingToken,
       )
     ) {
+      state.awaitingStarted = true;
       state.lastProgressAt = Date.now();
       updateUi(ctx);
     }
@@ -607,16 +642,10 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     )
       return;
     if (!state.awaitingCommand) return;
-    if (
-      !matchesQueuedWorkflowPrompt(
-        currentPrompt,
-        state.awaitingPrompt,
-        state.awaitingCommand,
-      )
-    )
-      return;
+    if (!state.awaitingStarted) return;
 
     const completedCommand = state.awaitingCommand;
+    state.awaitingStarted = false;
 
     if (completedCommand === CONTINUE_COMMAND) {
       if (ctx.hasUI) {
@@ -751,27 +780,52 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     queueNextStepIteration(ctx);
   });
 
-  pi.registerCommand("bmad-auto-continue", {
-    description: "Internal: continue autopilot in fresh session",
-    handler: async (_args, ctx: ExtensionCommandContext) => {
-      if (!state.active || state.phase !== "running") return;
+  const registerOttoCommand = (
+    primaryName: string,
+    legacyName: string,
+    description: string,
+    handler: (args: string, ctx: ExtensionCommandContext) => Promise<void>,
+  ): void => {
+    pi.registerCommand(primaryName, {
+      description,
+      handler,
+    });
+    pi.registerCommand(legacyName, {
+      description: `Alias for /${primaryName}`,
+      handler,
+    });
+  };
 
-      state.awaitingCommand = null;
-      state.awaitingPrompt = null;
-      persistState("session-hop-command-received");
-      updateUi(ctx);
+  const continueHandler = async (
+    _args: string,
+    ctx: ExtensionCommandContext,
+  ): Promise<void> => {
+    if (!state.active || state.phase !== "running") return;
 
-      const result = await ctx.newSession();
-      if (result.cancelled) {
-        stopRun(ctx, "error", "Session rotation cancelled.");
-        return;
-      }
+    state.awaitingCommand = null;
+    state.awaitingPrompt = null;
+    state.awaitingToken = null;
+    state.awaitingStarted = false;
+    persistState("session-hop-command-received");
+    updateUi(ctx);
 
-      persistState("session-rotated");
-      updateUi(ctx);
-      queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
-    },
-  });
+    const result = await ctx.newSession();
+    if (result.cancelled) {
+      stopRun(ctx, "error", "Session rotation cancelled.");
+      return;
+    }
+
+    persistState("session-rotated");
+    updateUi(ctx);
+    queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
+  };
+
+  registerOttoCommand(
+    "otto-continue",
+    "bmad-auto-continue",
+    "Internal: continue Otto in a fresh session",
+    continueHandler,
+  );
 
   registerWorkflowCommand(
     "bmad:td:initialize",
@@ -844,161 +898,205 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     "Alias for /bmad:bmm:code-review",
   );
 
-  pi.registerCommand("bmad-auto-start", {
-    description: "Start Otto initialize -> next-step loop",
-    handler: async (args, ctx) => {
-      if (state.active && state.phase !== "paused") {
-        ctx.ui.notify("Otto is already running.", "warning");
-        return;
-      }
+  const startHandler = async (
+    args: string,
+    ctx: ExtensionCommandContext,
+  ): Promise<void> => {
+    if (state.active && state.phase !== "paused") {
+      ctx.ui.notify("Otto is already running.", "warning");
+      return;
+    }
 
-      const parsed = parseStartArgs(args);
-      const { preferences, source, error } = loadAutopilotPreferences();
-      const defaults = preferences.defaults;
-      const now = Date.now();
-      const freshSessionBetweenSteps =
-        parsed.sameSession !== undefined
-          ? false
-          : (defaults?.freshSessionBetweenSteps ?? true);
-      const skipInit = parsed.skipInit ?? defaults?.skipInit ?? false;
-      const initialCommand = skipInit ? NEXT_STEP_COMMAND : INIT_COMMAND;
+    const parsed = parseStartArgs(args);
+    const { preferences, source, error } = loadAutopilotPreferences();
+    const defaults = preferences.defaults;
+    const now = Date.now();
+    const freshSessionBetweenSteps =
+      parsed.sameSession !== undefined
+        ? false
+        : (defaults?.freshSessionBetweenSteps ?? true);
+    const skipInit = parsed.skipInit ?? defaults?.skipInit ?? false;
+    const initialCommand = skipInit ? NEXT_STEP_COMMAND : INIT_COMMAND;
 
-      state = {
-        ...newRunState(),
-        runId: `run-${now}`,
-        active: true,
-        phase: skipInit ? "running" : "initializing",
-        maxIterations:
-          parsed.maxIterations ??
-          defaults?.maxIterations ??
-          state.maxIterations,
-        maxFailures:
-          parsed.maxFailures ?? defaults?.maxFailures ?? state.maxFailures,
-        freshSessionBetweenSteps,
-        lastProgressAt: now,
-        awaitingCommand: initialCommand,
-        awaitingPrompt: null,
-      };
+    state = {
+      ...newRunState(),
+      runId: `run-${now}`,
+      active: true,
+      phase: skipInit ? "running" : "initializing",
+      maxIterations:
+        parsed.maxIterations ?? defaults?.maxIterations ?? state.maxIterations,
+      maxFailures:
+        parsed.maxFailures ?? defaults?.maxFailures ?? state.maxFailures,
+      freshSessionBetweenSteps,
+      lastProgressAt: now,
+      awaitingCommand: initialCommand,
+      awaitingPrompt: null,
+      awaitingToken: null,
+      awaitingStarted: false,
+    };
 
-      persistState("start");
-      updateUi(ctx);
-      queueWorkflowCommand(ctx, initialCommand);
-      if (source && ctx.hasUI) {
-        ctx.ui.notify(
-          error
-            ? `Otto preferences fallback: ${source} could not be loaded (${error})`
-            : `Loaded Otto preferences from ${source}`,
-          error ? "warning" : "info",
-        );
-      }
-      ctx.ui.notify("Otto started.", "success");
-    },
-  });
-
-  pi.registerCommand("bmad-auto-status", {
-    description: "Show Otto state summary",
-    handler: async (_args, ctx) => {
-      const status = [
-        `Run: ${state.runId ?? "none"}`,
-        `Phase: ${state.phase}`,
-        `Active: ${state.active ? "yes" : "no"}`,
-        `Iteration: ${state.iteration}/${state.maxIterations}`,
-        `Failures: ${state.failures}/${state.maxFailures}`,
-        `Last command: ${state.lastCommand ?? "-"}`,
-        `Last issue: ${state.lastIssueId ?? "-"}`,
-      ].join("\n");
-
-      ctx.ui.notify(status, "info");
-      updateUi(ctx);
-    },
-  });
-
-  pi.registerCommand("bmad-auto-pause", {
-    description: "Pause Otto after current turn",
-    handler: async (_args, ctx) => {
-      if (!state.active) {
-        ctx.ui.notify("Otto is not running.", "warning");
-        return;
-      }
-      state.phase = "paused";
-      persistState("pause");
-      updateUi(ctx);
-      ctx.ui.notify("Otto paused.", "info");
-    },
-  });
-
-  pi.registerCommand("bmad-auto-resume", {
-    description: "Resume Otto loop",
-    handler: async (_args, ctx: ExtensionCommandContext) => {
-      if (!state.active || state.phase !== "paused") {
-        ctx.ui.notify("Otto is not paused.", "warning");
-        return;
-      }
-
-      state.phase = "running";
-      state.stopReason = null;
-      state.awaitingCommand = NEXT_STEP_COMMAND;
-      state.awaitingPrompt = null;
-      persistState("resume");
-      updateUi(ctx);
-
-      queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
-      ctx.ui.notify("Otto resumed.", "success");
-    },
-  });
-
-  pi.registerCommand("bmad-auto-stop", {
-    description: "Stop Otto loop",
-    handler: async (args, ctx) => {
-      if (!state.active) {
-        ctx.ui.notify("Otto is not running.", "warning");
-        return;
-      }
-      const reason = args.trim() || "Stopped manually.";
-      stopRun(ctx, "stopped", reason);
-    },
-  });
-
-  pi.registerCommand("bmad-auto-dive", {
-    description: "Navigate or fork at an Otto checkpoint",
-    handler: async (_args, ctx: ExtensionCommandContext) => {
-      if (!ctx.hasUI) {
-        ctx.ui.notify("/bmad-auto-dive requires interactive mode.", "error");
-        return;
-      }
-      if (state.checkpoints.length === 0) {
-        ctx.ui.notify("No Otto checkpoints available.", "warning");
-        return;
-      }
-
-      const recent = [...state.checkpoints].reverse().slice(0, 30);
-      const options = recent.map(
-        (checkpoint) =>
-          `#${checkpoint.iteration} | ${new Date(checkpoint.timestamp).toLocaleTimeString()} | ${checkpoint.command} | ${checkpoint.summary}`,
+    persistState("start");
+    updateUi(ctx);
+    queueWorkflowCommand(ctx, initialCommand);
+    if (source && ctx.hasUI) {
+      ctx.ui.notify(
+        error
+          ? `Otto preferences fallback: ${source} could not be loaded (${error})`
+          : `Loaded Otto preferences from ${source}`,
+        error ? "warning" : "info",
       );
+    }
+    ctx.ui.notify("Otto started.", "success");
+  };
 
-      const selected = await ctx.ui.select("Otto checkpoints", options);
-      if (!selected) return;
+  registerOttoCommand(
+    "otto-start",
+    "bmad-auto-start",
+    "Start Otto initialize -> next-step loop",
+    startHandler,
+  );
 
-      const index = options.indexOf(selected);
-      if (index < 0) return;
-      const checkpoint = recent[index];
+  const statusHandler = async (
+    _args: string,
+    ctx: ExtensionCommandContext,
+  ): Promise<void> => {
+    const status = [
+      `Run: ${state.runId ?? "none"}`,
+      `Phase: ${state.phase}`,
+      `Active: ${state.active ? "yes" : "no"}`,
+      `Iteration: ${state.iteration}/${state.maxIterations}`,
+      `Failures: ${state.failures}/${state.maxFailures}`,
+      `Last command: ${state.lastCommand ?? "-"}`,
+      `Last issue: ${state.lastIssueId ?? "-"}`,
+    ].join("\n");
 
-      const action = await ctx.ui.select("Checkpoint action", [
-        "Navigate here",
-        "Fork from here",
-      ]);
-      if (!action) return;
+    ctx.ui.notify(status, "info");
+    updateUi(ctx);
+  };
 
-      if (action === "Navigate here") {
-        await ctx.navigateTree(checkpoint.entryId, {
-          summarize: true,
-          label: `dive:${state.runId ?? "run"}:iter-${checkpoint.iteration}`,
-        });
-        return;
-      }
+  registerOttoCommand(
+    "otto-status",
+    "bmad-auto-status",
+    "Show Otto state summary",
+    statusHandler,
+  );
 
-      await ctx.fork(checkpoint.entryId);
-    },
-  });
+  const pauseHandler = async (
+    _args: string,
+    ctx: ExtensionCommandContext,
+  ): Promise<void> => {
+    if (!state.active) {
+      ctx.ui.notify("Otto is not running.", "warning");
+      return;
+    }
+    state.phase = "paused";
+    persistState("pause");
+    updateUi(ctx);
+    ctx.ui.notify("Otto paused.", "info");
+  };
+
+  registerOttoCommand(
+    "otto-pause",
+    "bmad-auto-pause",
+    "Pause Otto after current turn",
+    pauseHandler,
+  );
+
+  const resumeHandler = async (
+    _args: string,
+    ctx: ExtensionCommandContext,
+  ): Promise<void> => {
+    if (!state.active || state.phase !== "paused") {
+      ctx.ui.notify("Otto is not paused.", "warning");
+      return;
+    }
+
+    state.phase = "running";
+    state.stopReason = null;
+    state.awaitingCommand = NEXT_STEP_COMMAND;
+    state.awaitingPrompt = null;
+    state.awaitingToken = null;
+    state.awaitingStarted = false;
+    persistState("resume");
+    updateUi(ctx);
+
+    queueWorkflowCommand(ctx, NEXT_STEP_COMMAND);
+    ctx.ui.notify("Otto resumed.", "success");
+  };
+
+  registerOttoCommand(
+    "otto-resume",
+    "bmad-auto-resume",
+    "Resume Otto loop",
+    resumeHandler,
+  );
+
+  const stopHandler = async (
+    args: string,
+    ctx: ExtensionCommandContext,
+  ): Promise<void> => {
+    if (!state.active) {
+      ctx.ui.notify("Otto is not running.", "warning");
+      return;
+    }
+    const reason = args.trim() || "Stopped manually.";
+    stopRun(ctx, "stopped", reason);
+  };
+
+  registerOttoCommand(
+    "otto-stop",
+    "bmad-auto-stop",
+    "Stop Otto loop",
+    stopHandler,
+  );
+
+  const diveHandler = async (
+    _args: string,
+    ctx: ExtensionCommandContext,
+  ): Promise<void> => {
+    if (!ctx.hasUI) {
+      ctx.ui.notify("/otto-dive requires interactive mode.", "error");
+      return;
+    }
+    if (state.checkpoints.length === 0) {
+      ctx.ui.notify("No Otto checkpoints available.", "warning");
+      return;
+    }
+
+    const recent = [...state.checkpoints].reverse().slice(0, 30);
+    const options = recent.map(
+      (checkpoint) =>
+        `#${checkpoint.iteration} | ${new Date(checkpoint.timestamp).toLocaleTimeString()} | ${checkpoint.command} | ${checkpoint.summary}`,
+    );
+
+    const selected = await ctx.ui.select("Otto checkpoints", options);
+    if (!selected) return;
+
+    const index = options.indexOf(selected);
+    if (index < 0) return;
+    const checkpoint = recent[index];
+
+    const action = await ctx.ui.select("Checkpoint action", [
+      "Navigate here",
+      "Fork from here",
+    ]);
+    if (!action) return;
+
+    if (action === "Navigate here") {
+      await ctx.navigateTree(checkpoint.entryId, {
+        summarize: true,
+        label: `dive:${state.runId ?? "run"}:iter-${checkpoint.iteration}`,
+      });
+      return;
+    }
+
+    await ctx.fork(checkpoint.entryId);
+  };
+
+  registerOttoCommand(
+    "otto-dive",
+    "bmad-auto-dive",
+    "Navigate or fork at an Otto checkpoint",
+    diveHandler,
+  );
 }
