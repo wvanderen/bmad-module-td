@@ -127,7 +127,7 @@ Refs: {td_issue_id}
 ### Workspace Layout
 
 - `packages/bmad-module-td`: BMAD td module source (publishable)
-- `packages/pi-bmad-autopilot`: Otto workspace package for Pi
+- `packages/pi-bmad-autopilot`: Otto workspace package for Pi (`@wvanderen/otto`)
 - `examples/pi-extension`: local extension fixture for Pi
 
 Operational details: `docs/monorepo-ops.md`
@@ -153,16 +153,38 @@ npm run format:fix
 npm test
 ```
 
-## Otto Prototype
+## Otto
 
-This repository includes Otto, a local Pi extension prototype for autonomous BMAD execution:
+This repository includes Otto, a Pi-native operating layer for BMAD + td execution:
 
+- `packages/pi-bmad-autopilot`
 - `examples/pi-extension/bmad-autopilot.ts`
 - `examples/pi-extension/README.md`
 
-It provides an automation loop for `/bmad:td:initialize -> /bmad:td:next-step`, workflow monitoring, and checkpoint-based session dive tools.
+Otto is built for developer AI power users who already work fluently inside coding agents and want the next real jump in velocity.
 
-The prototype also supports optional JSON preferences from `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, or `BMAD_AUTOPILOT_CONFIG`, including per-workflow execution modes such as `party` for pre-implementation BMAD workflows.
+What Otto is optimized for:
+
+- tight, fresh context across repeated execution loops
+- strong next-step judgment instead of generic long-context wandering
+- review and approval discipline that respects td session separation
+- real runtime validation over artifact-only completion signals
+- closed-loop execution that can reopen PRD gaps as actionable td work
+
+Current Otto capabilities include:
+
+- an automation loop for `/bmad:td:initialize -> /bmad:td:next-step -> /bmad:td:validate-prd`
+- workflow wrappers for BMAD planning and review flows
+- workflow monitoring, failure budgets, and persisted run state
+- fresh-session continuation with checkpoint-based dive and fork tools
+- optional JSON preferences from `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, or `BMAD_AUTOPILOT_CONFIG`
+- per-workflow execution modes such as `party` for higher-steering workflows
+
+Otto strategy docs:
+
+- `docs/otto-manifesto.md`
+- `docs/otto-dna-roadmap.md`
+- `docs/otto-roadmap-4-8-weeks.md`
 
 ## Publishing
 

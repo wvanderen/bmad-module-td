@@ -12,6 +12,7 @@ const NEXT_STEP_COMMAND = "/bmad:td:next-step";
 const VALIDATE_PRD_COMMAND = "/bmad:td:validate-prd";
 const CONTINUE_COMMAND = "/bmad-auto-continue";
 const STATE_ENTRY_TYPE = "bmad-autopilot-state";
+const RESULT_PREFIX = "OTTO_RESULT";
 
 type WorkflowCommand =
   | "/bmad:td:initialize"
@@ -23,6 +24,26 @@ type WorkflowCommand =
   | "/bmad:bmm:code-review";
 
 type WorkflowMode = "accept-default" | "party";
+type ActionKind =
+  | "review"
+  | "implementation"
+  | "requirements-validation"
+  | "epic-workflow"
+  | "unknown";
+type OutcomeKind =
+  | "completed"
+  | "blocked"
+  | "needs-input"
+  | "no-work"
+  | "failed"
+  | "unknown";
+type ConfidenceKind = "high" | "medium" | "low" | "unknown";
+type ResultSourceKind =
+  | "structured"
+  | "heuristic"
+  | "malformed"
+  | "mismatched"
+  | null;
 
 interface AutopilotPreferences {
   defaults?: {
@@ -72,7 +93,10 @@ interface RunState {
   failures: number;
   maxFailures: number;
   lastCommand: string | null;
-  lastAction: string | null;
+  lastAction: ActionKind | null;
+  lastOutcome: OutcomeKind | null;
+  lastConfidence: ConfidenceKind;
+  lastResultSource: ResultSourceKind;
   lastIssueId: string | null;
   lastError: string | null;
   lastProgressAt: number;
@@ -95,6 +119,9 @@ const newRunState = (): RunState => ({
   maxFailures: 3,
   lastCommand: null,
   lastAction: null,
+  lastOutcome: null,
+  lastConfidence: "unknown",
+  lastResultSource: null,
   lastIssueId: null,
   lastError: null,
   lastProgressAt: Date.now(),
@@ -112,7 +139,7 @@ const shortText = (text: string, max = 120): string => {
   return `${squashed.slice(0, max - 3)}...`;
 };
 
-const classifyAction = (assistantText: string): string => {
+const classifyAction = (assistantText: string): ActionKind => {
   const text = assistantText.toLowerCase();
   if (text.includes("review") || text.includes("approve")) return "review";
   if (text.includes("implement") || text.includes("in_progress"))
@@ -125,6 +152,35 @@ const classifyAction = (assistantText: string): string => {
     text.includes("code-review")
   )
     return "epic-workflow";
+  return "unknown";
+};
+
+const classifyOutcome = (assistantText: string): OutcomeKind => {
+  const text = assistantText.toLowerCase();
+  if (
+    text.includes("no reviewable") ||
+    text.includes("no ready") ||
+    text.includes("no open issues") ||
+    text.includes("no follow-up td work remains")
+  ) {
+    return "no-work";
+  }
+  if (
+    text.includes("blocked") ||
+    text.includes("waiting on") ||
+    text.includes("unable to")
+  ) {
+    return "blocked";
+  }
+  if (
+    text.includes("ask one targeted question") ||
+    text.includes("need your direction") ||
+    text.includes("wait for user direction")
+  ) {
+    return "needs-input";
+  }
+  if (text.includes("error") || text.includes("failed")) return "failed";
+  if (text.length > 0) return "completed";
   return "unknown";
 };
 
@@ -153,6 +209,130 @@ const extractAssistantText = (messages: unknown[]): string => {
 const parseIssueId = (text: string): string | null => {
   const match = text.match(/\btd-[a-z0-9]+\b/i);
   return match ? match[0] : null;
+};
+
+interface WorkflowResult {
+  command: string;
+  action: ActionKind;
+  issueId: string | null;
+  outcome: OutcomeKind;
+  confidence: ConfidenceKind;
+  summary: string;
+}
+
+const parseWorkflowResult = (
+  assistantText: string,
+): { result: WorkflowResult | null; malformed: boolean } => {
+  const matches = [
+    ...assistantText.matchAll(
+      new RegExp(`^${RESULT_PREFIX}\\s+(\\{.*\\})$`, "gm"),
+    ),
+  ];
+  if (matches.length === 0) return { result: null, malformed: false };
+
+  const payload = matches[matches.length - 1]?.[1];
+  if (!payload) return { result: null, malformed: true };
+
+  try {
+    const parsed = JSON.parse(payload) as Partial<WorkflowResult>;
+    if (!parsed || typeof parsed !== "object") {
+      return { result: null, malformed: true };
+    }
+
+    const action =
+      parsed.action === "review" ||
+      parsed.action === "implementation" ||
+      parsed.action === "requirements-validation" ||
+      parsed.action === "epic-workflow"
+        ? parsed.action
+        : "unknown";
+    const outcome =
+      parsed.outcome === "completed" ||
+      parsed.outcome === "blocked" ||
+      parsed.outcome === "needs-input" ||
+      parsed.outcome === "no-work" ||
+      parsed.outcome === "failed"
+        ? parsed.outcome
+        : "unknown";
+    const confidence =
+      parsed.confidence === "high" ||
+      parsed.confidence === "medium" ||
+      parsed.confidence === "low"
+        ? parsed.confidence
+        : "unknown";
+    const summary =
+      typeof parsed.summary === "string" && parsed.summary.trim().length > 0
+        ? shortText(parsed.summary, 160)
+        : "No structured summary.";
+    const issueId =
+      typeof parsed.issueId === "string" &&
+      /\btd-[a-z0-9]+\b/i.test(parsed.issueId)
+        ? (parsed.issueId.match(/\btd-[a-z0-9]+\b/i)?.[0] ?? null)
+        : null;
+
+    return {
+      result:
+        typeof parsed.command === "string" && parsed.command.trim().length > 0
+          ? {
+              command: parsed.command,
+              action,
+              issueId,
+              outcome,
+              confidence,
+              summary,
+            }
+          : null,
+      malformed: false,
+    };
+  } catch {
+    return { result: null, malformed: true };
+  }
+};
+
+const resolveWorkflowResult = (
+  assistantText: string,
+  completedCommand: string,
+): {
+  result: WorkflowResult | null;
+  resultSource: ResultSourceKind;
+  error: string | null;
+  summary: string;
+} => {
+  const parsedWorkflowResult = parseWorkflowResult(assistantText);
+
+  if (parsedWorkflowResult.malformed) {
+    return {
+      result: null,
+      resultSource: "malformed",
+      error: "Malformed OTTO_RESULT payload.",
+      summary: shortText(assistantText || "No assistant summary."),
+    };
+  }
+
+  if (parsedWorkflowResult.result) {
+    if (parsedWorkflowResult.result.command !== completedCommand) {
+      return {
+        result: null,
+        resultSource: "mismatched",
+        error: `OTTO_RESULT command mismatch: expected ${completedCommand}, got ${parsedWorkflowResult.result.command}.`,
+        summary: parsedWorkflowResult.result.summary,
+      };
+    }
+
+    return {
+      result: parsedWorkflowResult.result,
+      resultSource: "structured",
+      error: null,
+      summary: parsedWorkflowResult.result.summary,
+    };
+  }
+
+  return {
+    result: null,
+    resultSource: "heuristic",
+    error: null,
+    summary: shortText(assistantText || "No assistant summary."),
+  };
 };
 
 const parseStartArgs = (
@@ -300,6 +480,10 @@ const workflowPrompt = (
     "- Prefer accept-default behavior and avoid unnecessary prompts.",
     `- ${workflow.extra}`,
     "- Report concrete actions taken, artifacts touched, and td outcomes.",
+    `- End your final response with exactly one line starting with ${RESULT_PREFIX} followed by valid single-line JSON with keys: command, action, issueId, outcome, confidence, summary.`,
+    "- Use action from: review, implementation, requirements-validation, epic-workflow, unknown.",
+    "- Use outcome from: completed, blocked, needs-input, no-work, failed, unknown.",
+    "- Use confidence from: high, medium, low, unknown.",
   ];
 
   if (workflowModeFor(command, preferences) === "party") {
@@ -375,7 +559,10 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       `Queue drain passes: ${state.emptyQueuePasses}`,
       `Last command: ${state.lastCommand ?? "-"}`,
       `Last action: ${state.lastAction ?? "-"}`,
+      `Last outcome: ${state.lastOutcome ?? "-"}`,
+      `Confidence: ${state.lastConfidence}`,
       `Last issue: ${state.lastIssueId ?? "-"}`,
+      `Result source: ${state.lastResultSource ?? "-"}`,
       `Session hop: ${state.freshSessionBetweenSteps ? "on" : "off"}`,
     ];
 
@@ -541,6 +728,29 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     }
   };
 
+  const registerLoopFailure = (
+    ctx: ExtensionContext,
+    message: string,
+    phase: Phase = "error",
+  ): boolean => {
+    state.failures += 1;
+    state.lastError = message;
+    state.lastProgressAt = Date.now();
+
+    if (state.failures >= state.maxFailures) {
+      stopRun(
+        ctx,
+        phase,
+        `${message} Failure budget reached (${state.failures}/${state.maxFailures}).`,
+      );
+      return true;
+    }
+
+    persistState(`failure:${phase}`);
+    updateUi(ctx);
+    return false;
+  };
+
   const registerWorkflowCommand = (
     name: string,
     command: WorkflowCommand,
@@ -630,7 +840,12 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     }
 
     const assistantText = extractAssistantText(event.messages as unknown[]);
-    const summary = shortText(assistantText || "No assistant summary.");
+    const resolvedWorkflowResult = resolveWorkflowResult(
+      assistantText,
+      completedCommand,
+    );
+    const workflowResult = resolvedWorkflowResult.result;
+    const summary = resolvedWorkflowResult.summary;
     const entryId = ctx.sessionManager.getLeafId();
 
     if (entryId) {
@@ -652,25 +867,58 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       );
     }
 
-    state.lastIssueId = parseIssueId(assistantText) ?? state.lastIssueId;
-    state.lastAction = classifyAction(assistantText);
+    state.lastIssueId =
+      workflowResult?.issueId ??
+      parseIssueId(assistantText) ??
+      state.lastIssueId;
+    state.lastAction = workflowResult?.action ?? classifyAction(assistantText);
+    state.lastOutcome =
+      workflowResult?.outcome ?? classifyOutcome(assistantText);
+    state.lastConfidence = workflowResult?.confidence ?? "unknown";
+    state.lastResultSource = resolvedWorkflowResult.resultSource;
     state.lastProgressAt = Date.now();
+    state.lastError = resolvedWorkflowResult.error;
+
+    if (resolvedWorkflowResult.error) {
+      if (registerLoopFailure(ctx, resolvedWorkflowResult.error)) return;
+    }
 
     if (turnHadToolError) {
-      state.failures += 1;
-      if (state.failures >= state.maxFailures) {
-        stopRun(
+      if (registerLoopFailure(ctx, state.lastError ?? "A tool failed.")) return;
+    }
+
+    if (workflowResult?.outcome === "failed") {
+      if (
+        registerLoopFailure(
           ctx,
-          "error",
-          `Failure budget reached (${state.failures}/${state.maxFailures}).`,
-        );
+          `Workflow reported failure for ${completedCommand}.`,
+        )
+      )
         return;
-      }
+    }
+
+    if (workflowResult?.outcome === "needs-input") {
+      stopRun(
+        ctx,
+        "paused",
+        `Workflow requested user input for ${completedCommand}.`,
+      );
+      return;
+    }
+
+    if (workflowResult?.outcome === "blocked") {
+      stopRun(
+        ctx,
+        "paused",
+        `Workflow reported blocked state for ${completedCommand}.`,
+      );
+      return;
     }
 
     if (completedCommand === INIT_COMMAND) {
       state.emptyQueuePasses = 0;
       state.phase = "running";
+      state.lastError = null;
       persistState("init-complete");
       if (ctx.hasUI) {
         ctx.ui.notify(
@@ -698,14 +946,11 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       const workState = await hasRemainingWork();
       workLeft = workState.hasImmediateWork;
       hasInReview = workState.hasInReview;
+      state.lastError = null;
     } catch (error) {
-      state.failures += 1;
-      state.lastError =
+      const message =
         error instanceof Error ? error.message : "Unknown td check failure";
-      if (state.failures >= state.maxFailures) {
-        stopRun(ctx, "error", "Unable to query td queue state.");
-        return;
-      }
+      if (registerLoopFailure(ctx, message)) return;
       workLeft = true;
     }
 

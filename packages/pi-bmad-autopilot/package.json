@@ -1,13 +1,13 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@wvanderen/pi-bmad-autopilot",
+  "name": "@wvanderen/otto",
   "version": "0.0.1",
-  "description": "Otto Pi extension wrappers and automation loop for BMAD td workflows",
+  "description": "Otto, the Pi-native operating layer for BMAD and td workflows",
   "keywords": [
     "bmad",
     "td",
     "pi",
-    "autopilot",
+    "otto",
     "workflow"
   ],
   "repository": {
@@ -22,7 +22,8 @@
     ".": "./src/index.ts"
   },
   "files": [
-    "src"
+    "src",
+    "otto.svg"
   ],
   "scripts": {
     "sync:source": "node ../../scripts/sync-pi-autopilot.mjs",

@@ -124,7 +124,7 @@ Refs: {td_issue_id}
 ### Workspace Layout
 
 - `.`: BMAD td module package source (publishable)
-- `packages/pi-bmad-autopilot`: Otto workspace package for Pi
+- `packages/pi-bmad-autopilot`: Otto workspace package for Pi (`@wvanderen/otto`)
 - `examples/pi-extension`: extension file used for local Pi installation
 
 Operational details: `docs/monorepo-ops.md`

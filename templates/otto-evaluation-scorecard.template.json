@@ -1,0 +1,67 @@
+{
+  "run": {
+    "id": "otto-dry-run-001",
+    "date": "2026-03-06",
+    "operator": "lem",
+    "mode": "delivery",
+    "project": "example-project",
+    "model": "openai/gpt-5.4",
+    "finalStatus": "completed"
+  },
+  "metrics": {
+    "nextStep": {
+      "total": 10,
+      "agreed": 8,
+      "disagreed": 1,
+      "uncertain": 1
+    },
+    "queue": {
+      "initialReady": 6,
+      "completed": 5,
+      "approved": 4,
+      "reopened": 1,
+      "blockedUnexpectedly": 0
+    },
+    "truthGaps": {
+      "detectedBeforeApproval": 2,
+      "detectedAfterApproval": 0,
+      "escapedFalseCompletion": 0,
+      "simulatedSuccessIncidents": 1
+    },
+    "continuity": {
+      "sessionHopAttempts": 6,
+      "sessionHopSuccesses": 5,
+      "compactionsUsed": 1,
+      "continuityLossIncidents": 0
+    },
+    "oversight": {
+      "humanInterventions": 2,
+      "lowConfidenceApprovals": 0,
+      "runtimeValidatedApprovals": 4
+    }
+  },
+  "sections": {
+    "decisionQuality": 24,
+    "queueDrainQuality": 20,
+    "productTruthDetection": 21,
+    "contextDiscipline": 8,
+    "operatorExperience": 8
+  },
+  "flags": {
+    "approvedFalseCompletion": false,
+    "majorPrdTruthGapEscaped": false,
+    "repeatedBadNextStepChoices": false,
+    "runtimeEvidenceMismatch": false,
+    "excessiveBabysitting": false,
+    "continuityFeltBlurry": false
+  },
+  "notes": {
+    "bestDecisionMade": "Otto corrected td framing before continuing implementation.",
+    "worstDecisionMade": "One weak runtime check forced a manual review step.",
+    "strongestRuntimeEvidence": "CLI behavior was exercised directly before approval.",
+    "biggestTruthGapCaught": "Placeholder success in health output was identified before approval.",
+    "whereContextDisciplineHelpedMost": "Fresh session hopping kept the active issue framing sharp.",
+    "wouldTrustOnSecondProject": true,
+    "tags": ["otto", "delivery-mode"]
+  }
+}

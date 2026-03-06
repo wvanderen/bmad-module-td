@@ -3,7 +3,7 @@
 ## Package Boundaries
 
 - `@wvanderen/bmad-module-td` (`packages/bmad-module-td`): BMAD td-integration module content.
-- `@wvanderen/pi-bmad-autopilot` (`packages/pi-bmad-autopilot`): Otto workspace package for Pi.
+- `@wvanderen/otto` (`packages/pi-bmad-autopilot`): Otto workspace package for Pi.
 
 ## Source of Truth
 

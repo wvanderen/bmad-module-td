@@ -3,6 +3,15 @@
 You must run td usage --new-session at conversation start (or after /clear) to see current work.
 Use td usage -q for subsequent reads.
 
+## MANDATORY: Use btca for Pi Integration Reference
+
+When work touches Pi integration, Pi extension behavior, or `@mariozechner/pi-coding-agent`, use btca as the first reference point against the Pi codebase.
+
+- Project btca config lives at `btca.config.jsonc`.
+- The Pi repo is registered as the `pi` btca resource and points to `https://github.com/badlogic/pi-mono`.
+- Before making Pi integration decisions, query btca with `btca ask -r pi -q "<question>"` to confirm current Pi APIs, patterns, and integration details.
+- Prefer btca answers over memory for Pi-specific behavior, and mention when btca could not be consulted.
+
 ---
 
 ## BMAD Modules
