@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
@@ -8,6 +11,37 @@ const INIT_COMMAND = "/bmad:td:initialize";
 const NEXT_STEP_COMMAND = "/bmad:td:next-step";
 const CONTINUE_COMMAND = "/bmad-auto-continue";
 const STATE_ENTRY_TYPE = "bmad-autopilot-state";
+
+type WorkflowCommand =
+  | "/bmad:td:initialize"
+  | "/bmad:td:next-step"
+  | "/bmad:bmm:create-architecture"
+  | "/bmad:bmm:create-epics-and-stories"
+  | "/bmad:bmm:create-story"
+  | "/bmad:bmm:code-review";
+
+type WorkflowMode = "accept-default" | "party";
+
+interface AutopilotPreferences {
+  defaults?: {
+    skipInit?: boolean;
+    maxIterations?: number;
+    maxFailures?: number;
+    freshSessionBetweenSteps?: boolean;
+  };
+  workflows?: {
+    defaultMode?: WorkflowMode;
+    commandModes?: Partial<Record<WorkflowCommand, WorkflowMode>>;
+  };
+}
+
+interface LoadedPreferences {
+  preferences: AutopilotPreferences;
+  source: string | null;
+  error: string | null;
+}
+
+const CONFIG_PATHS = [".bmad-autopilot.json", ".pi/bmad-autopilot.json"];
 
 type Phase =
   | "idle"
@@ -118,7 +152,7 @@ const parseIssueId = (text: string): string | null => {
 const parseStartArgs = (
   args: string,
 ): {
-  skipInit: boolean;
+  skipInit?: boolean;
   maxIterations?: number;
   maxFailures?: number;
   sameSession?: boolean;
@@ -129,11 +163,11 @@ const parseStartArgs = (
     .filter((token) => token.length > 0);
 
   const parsed: {
-    skipInit: boolean;
+    skipInit?: boolean;
     maxIterations?: number;
     maxFailures?: number;
     sameSession?: boolean;
-  } = { skipInit: false };
+  } = {};
 
   for (const token of tokens) {
     if (token === "--skip-init") parsed.skipInit = true;
@@ -154,14 +188,49 @@ const parseStartArgs = (
   return parsed;
 };
 
+const loadAutopilotPreferences = (): LoadedPreferences => {
+  const envPath = process.env.BMAD_AUTOPILOT_CONFIG?.trim();
+  const candidates = [
+    ...(envPath ? [resolve(envPath)] : []),
+    ...CONFIG_PATHS.map((filePath) => resolve(process.cwd(), filePath)),
+  ];
+
+  for (const filePath of candidates) {
+    if (!existsSync(filePath)) continue;
+    try {
+      const raw = readFileSync(filePath, "utf8");
+      const parsed = JSON.parse(raw) as AutopilotPreferences;
+      return {
+        preferences: parsed && typeof parsed === "object" ? parsed : {},
+        source: filePath,
+        error: null,
+      };
+    } catch (error) {
+      return {
+        preferences: {},
+        source: filePath,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unknown preference parse error",
+      };
+    }
+  }
+
+  return { preferences: {}, source: null, error: null };
+};
+
+const workflowModeFor = (
+  command: WorkflowCommand,
+  preferences: AutopilotPreferences,
+): WorkflowMode =>
+  preferences.workflows?.commandModes?.[command] ??
+  preferences.workflows?.defaultMode ??
+  "accept-default";
+
 const workflowPrompt = (
-  command:
-    | "/bmad:td:initialize"
-    | "/bmad:td:next-step"
-    | "/bmad:bmm:create-architecture"
-    | "/bmad:bmm:create-epics-and-stories"
-    | "/bmad:bmm:create-story"
-    | "/bmad:bmm:code-review",
+  command: WorkflowCommand,
+  preferences: AutopilotPreferences,
 ): string => {
   const workflow =
     command === "/bmad:td:initialize"
@@ -212,6 +281,19 @@ const workflowPrompt = (
                     "Execute code-review from workflow files directly and report findings and decision.",
                 };
 
+  const executionRequirements = [
+    "- Follow workflow instructions directly and perform actions, not just explain them.",
+    "- Prefer accept-default behavior and avoid unnecessary prompts.",
+    `- ${workflow.extra}`,
+    "- Report concrete actions taken, artifacts touched, and td outcomes.",
+  ];
+
+  if (workflowModeFor(command, preferences) === "party") {
+    executionRequirements.push(
+      "- Run this workflow in party mode: pause at major phase transitions, surface key options or tradeoffs, and wait for user direction before continuing.",
+    );
+  }
+
   return [
     `Execute BMAD workflow now: ${command}`,
     "",
@@ -221,10 +303,7 @@ const workflowPrompt = (
     `- ${workflow.instructions}`,
     "",
     "Execution requirements:",
-    "- Follow workflow instructions directly and perform actions, not just explain them.",
-    "- Prefer accept-default behavior and avoid unnecessary prompts.",
-    `- ${workflow.extra}`,
-    "- Report concrete actions taken, artifacts touched, and td outcomes.",
+    ...executionRequirements,
   ].join("\n");
 };
 
@@ -288,15 +367,11 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
     ctx: ExtensionContext,
     command: string,
   ): void => {
-    const prompt = workflowPrompt(
-      command as
-        | "/bmad:td:initialize"
-        | "/bmad:td:next-step"
-        | "/bmad:bmm:create-architecture"
-        | "/bmad:bmm:create-epics-and-stories"
-        | "/bmad:bmm:create-story"
-        | "/bmad:bmm:code-review",
-    );
+    const { preferences, source, error } = loadAutopilotPreferences();
+    if (error) {
+      state.lastError = `Preference load failed (${source}): ${error}`;
+    }
+    const prompt = workflowPrompt(command as WorkflowCommand, preferences);
     const options = ctx.isIdle()
       ? undefined
       : { deliverAs: "followUp" as const };
@@ -429,23 +504,24 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
 
   const registerWorkflowCommand = (
     name: string,
-    command:
-      | "/bmad:td:initialize"
-      | "/bmad:td:next-step"
-      | "/bmad:bmm:create-architecture"
-      | "/bmad:bmm:create-epics-and-stories"
-      | "/bmad:bmm:create-story"
-      | "/bmad:bmm:code-review",
+    command: WorkflowCommand,
     description: string,
   ): void => {
     pi.registerCommand(name, {
       description,
       handler: async (_args, ctx) => {
-        const prompt = workflowPrompt(command);
+        const { preferences, source, error } = loadAutopilotPreferences();
+        const prompt = workflowPrompt(command, preferences);
         const options = ctx.isIdle()
           ? undefined
           : { deliverAs: "followUp" as const };
         pi.sendUserMessage(prompt, options);
+        if (error && ctx.hasUI) {
+          ctx.ui.notify(
+            `BMAD autopilot preferences fallback: ${source} could not be loaded (${error})`,
+            "warning",
+          );
+        }
         ctx.ui.notify(`Queued ${command}`, "info");
       },
     });
@@ -693,27 +769,44 @@ export default function bmadAutopilot(pi: ExtensionAPI) {
       }
 
       const parsed = parseStartArgs(args);
+      const { preferences, source, error } = loadAutopilotPreferences();
+      const defaults = preferences.defaults;
       const now = Date.now();
+      const freshSessionBetweenSteps =
+        parsed.sameSession !== undefined
+          ? false
+          : (defaults?.freshSessionBetweenSteps ?? true);
+      const skipInit = parsed.skipInit ?? defaults?.skipInit ?? false;
+      const initialCommand = skipInit ? NEXT_STEP_COMMAND : INIT_COMMAND;
 
       state = {
         ...newRunState(),
         runId: `run-${now}`,
         active: true,
-        phase: parsed.skipInit ? "running" : "initializing",
-        maxIterations: parsed.maxIterations ?? state.maxIterations,
-        maxFailures: parsed.maxFailures ?? state.maxFailures,
-        freshSessionBetweenSteps: parsed.sameSession ? false : true,
+        phase: skipInit ? "running" : "initializing",
+        maxIterations:
+          parsed.maxIterations ??
+          defaults?.maxIterations ??
+          state.maxIterations,
+        maxFailures:
+          parsed.maxFailures ?? defaults?.maxFailures ?? state.maxFailures,
+        freshSessionBetweenSteps,
         lastProgressAt: now,
-        awaitingCommand: parsed.skipInit ? NEXT_STEP_COMMAND : INIT_COMMAND,
+        awaitingCommand: initialCommand,
         awaitingPrompt: null,
       };
 
       persistState("start");
       updateUi(ctx);
-      queueWorkflowCommand(
-        ctx,
-        parsed.skipInit ? NEXT_STEP_COMMAND : INIT_COMMAND,
-      );
+      queueWorkflowCommand(ctx, initialCommand);
+      if (source && ctx.hasUI) {
+        ctx.ui.notify(
+          error
+            ? `BMAD autopilot preferences fallback: ${source} could not be loaded (${error})`
+            : `Loaded BMAD autopilot preferences from ${source}`,
+          error ? "warning" : "info",
+        );
+      }
       ctx.ui.notify("BMAD autopilot started.", "success");
     },
   });

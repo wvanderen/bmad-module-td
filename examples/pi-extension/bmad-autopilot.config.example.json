@@ -1,0 +1,15 @@
+{
+  "defaults": {
+    "skipInit": false,
+    "maxIterations": 40,
+    "maxFailures": 3,
+    "freshSessionBetweenSteps": true
+  },
+  "workflows": {
+    "defaultMode": "accept-default",
+    "commandModes": {
+      "/bmad:bmm:create-architecture": "party",
+      "/bmad:bmm:create-epics-and-stories": "party"
+    }
+  }
+}

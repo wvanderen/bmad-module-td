@@ -44,6 +44,31 @@ Then run `/reload` in Pi.
 - `/bmad-auto-stop [reason]`
 - `/bmad-auto-dive`
 
+## Preferences
+
+Autopilot can load optional JSON preferences from either `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, or the path in `BMAD_AUTOPILOT_CONFIG`.
+
+Example:
+
+```json
+{
+  "defaults": {
+    "maxIterations": 40,
+    "freshSessionBetweenSteps": true
+  },
+  "workflows": {
+    "defaultMode": "accept-default",
+    "commandModes": {
+      "/bmad:bmm:create-architecture": "party",
+      "/bmad:bmm:create-epics-and-stories": "party"
+    }
+  }
+}
+```
+
+- `defaults` sets the fallback behavior for `/bmad-auto-start`.
+- `workflows.commandModes` lets you opt specific workflows into `party` mode while keeping the rest accept-default.
+
 ## Notes
 
 - Checkpoints are labeled in the session tree as `auto:<runId>:iter-<N>`.

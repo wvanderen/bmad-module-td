@@ -152,6 +152,8 @@ This repository includes a local Pi extension prototype for autonomous BMAD exec
 
 It provides an autopilot loop for `/bmad:td:initialize -> /bmad:td:next-step`, workflow monitoring, and checkpoint-based session dive tools.
 
+The prototype also supports optional JSON preferences from `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, or `BMAD_AUTOPILOT_CONFIG`, including per-workflow execution modes such as `party` for pre-implementation BMAD workflows.
+
 ## Publishing
 
 ```bash

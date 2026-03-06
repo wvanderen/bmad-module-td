@@ -8,6 +8,8 @@ Current source of truth:
 
 The package entrypoint re-exports that file for monorepo development.
 
+Autopilot also supports optional JSON preferences from `.bmad-autopilot.json`, `.pi/bmad-autopilot.json`, or `BMAD_AUTOPILOT_CONFIG`. Use `workflows.commandModes` to opt workflows like `/bmad:bmm:create-architecture` into `party` mode.
+
 ## Publishing
 
 ```bash
