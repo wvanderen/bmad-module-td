@@ -121,6 +121,19 @@ assert.deepEqual(
   },
 );
 assert.deepEqual(
+  inspectEvidence("Completed with mocked backend and placeholder UI.", {
+    outcome: "completed",
+    confidence: "high",
+  }),
+  {
+    signals: ["placeholder-success"],
+    alert: "placeholder success",
+    completedLike: true,
+    shouldValidate: true,
+    effectiveConfidence: "low",
+  },
+);
+assert.deepEqual(
   inspectEvidence(
     "Completed td-7ba2f2 by adding simulated-success detection and td drift handling.",
     { outcome: "completed", confidence: "high" },

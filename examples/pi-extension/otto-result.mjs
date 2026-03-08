@@ -171,7 +171,7 @@ const EVIDENCE_PATTERNS = [
     signal: "placeholder-success",
     alert: "placeholder success",
     pattern:
-      /\b(?:still placeholder-heavy|placeholder-heavy delivery|placeholder success|mock(?:ed)? success|simulat(?:ed|ion) success|synthetic success|stub(?:bed)? success|fake success|artifact-only success|scaffold-heavy delivery|demo-only delivery|product core is still missing|core loop not real yet)\b/i,
+      /\b(?:still placeholder-heavy|placeholder-heavy delivery|placeholder success|placeholder (?:ui|backend|service|api|flow|integration|implementation|delivery)|mock(?:ed)? success|mock(?:ed)? (?:backend|service|api|data|ui|flow|integration|implementation)|simulat(?:ed|ion) success|simulat(?:ed|ion) (?:backend|service|api|data|ui|flow|integration)|synthetic success|synthetic (?:backend|service|api|data|ui|flow|integration)|stub(?:bed)? success|stub(?:bed)? (?:backend|service|api|data|ui|flow|integration|implementation)|fake success|fake (?:backend|service|api|data|ui|flow|integration)|artifact-only success|scaffold-heavy delivery|demo-only delivery|product core is still missing|core loop not real yet)\b/i,
   },
   {
     signal: "runtime-gap",
