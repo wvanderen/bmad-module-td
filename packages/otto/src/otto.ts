@@ -297,6 +297,11 @@ const checkpointContextLabel = (checkpoint: Checkpoint): string => {
   return issue !== "-" ? issue : shortText(checkpoint.command, 42);
 };
 
+const mergeEvidenceSignals = (
+  current: string[],
+  additions: string[],
+): string[] => [...new Set([...current, ...additions])];
+
 const stateAlert = (runState: RunState): string | null => {
   if (runState.lastEvidenceAlert) {
     return runState.lastEvidenceAlert;
@@ -1256,6 +1261,7 @@ export default function otto(pi: ExtensionAPI) {
     state.lastError = resolvedWorkflowResult.error;
 
     const alert = stateAlert(state);
+    const checkpointIndex = state.checkpoints.length;
 
     if (entryId) {
       state.checkpoints.push({
@@ -1367,6 +1373,32 @@ export default function otto(pi: ExtensionAPI) {
             ? "drained-ready-for-validation"
             : "drained-first-pass";
       state.lastError = null;
+
+      if (state.lastOutcome === "no-work" && (workLeft || hasInReview)) {
+        const tdDriftReason = workLeft
+          ? "Workflow reported no-work, but td still has ready or reviewable issues."
+          : "Workflow reported no-work, but td still has in-review issues.";
+        const evidenceSignals = mergeEvidenceSignals(
+          state.lastEvidenceSignals,
+          ["td-drift", "result-drift"],
+        );
+        state.lastEvidenceSignals = evidenceSignals;
+        state.lastEvidenceAlert = "td drift";
+        state.lastConfidence = "low";
+        state.lastDecisionReason = shortText(tdDriftReason, 160);
+
+        const checkpoint = state.checkpoints[checkpointIndex];
+        if (checkpoint) {
+          checkpoint.evidenceSignals = evidenceSignals;
+          checkpoint.alert = "td drift";
+          checkpoint.confidence = "low";
+          checkpoint.reason = state.lastDecisionReason;
+        }
+
+        if (ctx.hasUI) {
+          ctx.ui.notify(tdDriftReason, "warning");
+        }
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unknown td check failure";

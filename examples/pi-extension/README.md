@@ -100,6 +100,7 @@ The packaged Otto extension ships an `otto` skill resource for Pi agents.
 - `/otto-dive` can either navigate to a checkpoint or fork from it.
 - Otto sweeps drained queues for epic maintenance, then runs `/bmad:td:validate-prd` before stopping when no follow-up td work remains.
 - If a workflow claims completion with placeholder, drift, or weak-runtime-evidence language, Otto jumps straight to `/bmad:td:validate-prd` instead of treating that as a clean stop.
+- If a workflow reports `no-work` but `td` still shows ready, reviewable, or in-review issues, Otto marks that turn as `td drift`, lowers confidence, and keeps the loop moving.
 - By default, Otto hops to a fresh session between `next-step` iterations. Use `--same-session` to disable.
 - If the runtime treats `/otto-continue` as plain text, Otto falls back to same-session compacted continuation for that cycle.
 - When only `in-review` issues remain, Otto continues with a session hop (default mode) to allow cross-session review separation.
