@@ -1,7 +1,16 @@
 {
+  "autonomy": {
+    "mode": "delivery",
+    "policies": {
+      "approval": "strict",
+      "drift": "validate",
+      "evidence": "strict",
+      "steering": "steady"
+    }
+  },
   "defaults": {
     "skipInit": false,
-    "maxIterations": 40,
+    "maxIterations": 25,
     "maxFailures": 3,
     "freshSessionBetweenSteps": true
   },
@@ -9,7 +18,8 @@
     "defaultMode": "accept-default",
     "commandModes": {
       "/bmad:bmm:create-architecture": "party",
-      "/bmad:bmm:create-epics-and-stories": "party"
+      "/bmad:bmm:create-epics-and-stories": "party",
+      "/bmad:td:validate-prd": "party"
     }
   }
 }

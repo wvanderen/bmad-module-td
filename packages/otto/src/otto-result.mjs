@@ -231,7 +231,11 @@ const downgradeConfidence = (confidence, severe) => {
   return confidence;
 };
 
-export const inspectEvidence = (assistantText, workflowResult = null) => {
+export const inspectEvidence = (
+  assistantText,
+  workflowResult = null,
+  evidencePolicy = "balanced",
+) => {
   const text = assistantText || "";
   const inferredOutcome = workflowResult?.outcome ?? classifyOutcome(text);
   const completedLike =
@@ -255,16 +259,23 @@ export const inspectEvidence = (assistantText, workflowResult = null) => {
     uniqueSignals.includes("runtime-gap");
   const confidence = workflowResult?.confidence ?? "unknown";
 
+  const shouldValidate =
+    completedLike &&
+    (evidencePolicy === "strict"
+      ? uniqueSignals.length > 0
+      : evidencePolicy === "relaxed"
+        ? uniqueSignals.includes("placeholder-success") ||
+          uniqueSignals.includes("result-drift")
+        : uniqueSignals.includes("placeholder-success") ||
+          uniqueSignals.includes("runtime-gap") ||
+          uniqueSignals.includes("prd-gap") ||
+          uniqueSignals.includes("result-drift"));
+
   return {
     signals: uniqueSignals,
     alert: alerts[0] ?? null,
     completedLike,
-    shouldValidate:
-      completedLike &&
-      (uniqueSignals.includes("placeholder-success") ||
-        uniqueSignals.includes("runtime-gap") ||
-        uniqueSignals.includes("prd-gap") ||
-        uniqueSignals.includes("result-drift")),
+    shouldValidate,
     effectiveConfidence: uniqueSignals.length
       ? downgradeConfidence(confidence, severe)
       : confidence,

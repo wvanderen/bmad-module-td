@@ -70,22 +70,37 @@ Example:
 
 ```json
 {
+  "autonomy": {
+    "mode": "delivery",
+    "policies": {
+      "approval": "strict",
+      "drift": "validate",
+      "evidence": "strict",
+      "steering": "steady"
+    }
+  },
   "defaults": {
-    "maxIterations": 40,
+    "maxIterations": 25,
     "freshSessionBetweenSteps": true
   },
   "workflows": {
     "defaultMode": "accept-default",
     "commandModes": {
       "/bmad:bmm:create-architecture": "party",
-      "/bmad:bmm:create-epics-and-stories": "party"
+      "/bmad:bmm:create-epics-and-stories": "party",
+      "/bmad:td:validate-prd": "party"
     }
   }
 }
 ```
 
+- `autonomy.mode` gives Otto a coherent posture: `delivery`, `explore`, or `custom`.
+- `autonomy.policies` makes approval, drift handling, evidence thresholds, and steering explicit without abandoning Otto's core loop.
 - `defaults` sets the fallback behavior for `/otto-start`.
 - `workflows.commandModes` lets you opt specific workflows into `party` mode while keeping the rest accept-default.
+- Delivery mode defaults to strict approval, drift-triggered PRD validation, strict evidence, and steady steering.
+- Explore mode defaults to draft approval, continue-on-drift, relaxed evidence, interactive steering, same-session continuity, and `party` workflow mode.
+- Custom mode keeps Otto coherent by starting from delivery posture and then applying your policy overrides.
 
 ## Otto Skill Resource
 
@@ -101,6 +116,7 @@ The packaged Otto extension ships an `otto` skill resource for Pi agents.
 - Otto sweeps drained queues for epic maintenance, then runs `/bmad:td:validate-prd` before stopping when no follow-up td work remains.
 - If a workflow claims completion with placeholder, drift, or weak-runtime-evidence language, Otto jumps straight to `/bmad:td:validate-prd` instead of treating that as a clean stop.
 - If a workflow reports `no-work` but `td` still shows ready, reviewable, or in-review issues, Otto marks that turn as `td drift`, lowers confidence, and keeps the loop moving.
+- Drift handling now follows the active autonomy policy: validate immediately, continue with a warning, or pause for operator input.
 - By default, Otto hops to a fresh session between `next-step` iterations. Use `--same-session` to disable.
 - If the runtime treats `/otto-continue` as plain text, Otto falls back to same-session compacted continuation for that cycle.
 - When only `in-review` issues remain, Otto continues with a session hop (default mode) to allow cross-session review separation.

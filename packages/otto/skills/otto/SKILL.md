@@ -26,6 +26,12 @@ Before long autonomous runs, prefer a project-local Otto setup:
 
 Otto prefers `.pi/otto.json` and `OTTO_CONFIG`, while still supporting `.bmad-autopilot.json` and `BMAD_AUTOPILOT_CONFIG` for compatibility.
 
+Recommended operating modes:
+
+- `delivery` - strict approval, validate on drift, strict evidence, steady steering
+- `explore` - draft approval, continue on drift, relaxed evidence, interactive steering
+- `custom` - keep Otto's delivery-shaped control loop, but override approval, drift, evidence, or steering policies explicitly
+
 ## Core Commands
 
 - `/otto-onboard` - set Otto project preferences
@@ -39,6 +45,7 @@ Otto prefers `.pi/otto.json` and `OTTO_CONFIG`, while still supporting `.bmad-au
 ## Operating Guidance
 
 - Prefer project preferences over ad hoc flags when the team wants stable behavior.
+- Treat `delivery` as the default serious-work posture and `explore` as the default discovery posture.
 - Keep fresh-session continuation enabled unless the operator explicitly wants same-session compaction.
 - Use `party` mode selectively for workflows that benefit from higher steering, such as architecture or PRD validation.
 - Trust runtime evidence, PRD validation, and td state over workflow-completion phrasing alone.

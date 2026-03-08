@@ -74,6 +74,7 @@ Otto currently provides:
 - PRD gap reopening so weak or partial delivery becomes real follow-up work
 - evidence heuristics that flag placeholder, runtime-gap, PRD-gap, and drift language before Otto stops
 - td drift detection when a workflow claims no remaining work but td state still disagrees
+- formalized `delivery`, `explore`, and `custom` autonomy modes with explicit approval, drift, evidence, and steering policies
 - optional workflow-specific steering via `party` mode
 - a packaged `otto` skill resource discoverable by Pi agents
 
@@ -96,6 +97,20 @@ Use `workflows.commandModes` to opt specific workflows into `party` mode, for ex
 - `/bmad:td:validate-prd`
 
 This supports mixed autonomy rather than one fixed control philosophy.
+
+Otto now also supports explicit autonomy policies:
+
+- `autonomy.mode`: `delivery`, `explore`, or `custom`
+- `autonomy.policies.approval`: `strict`, `balanced`, or `draft`
+- `autonomy.policies.drift`: `validate`, `continue`, or `pause`
+- `autonomy.policies.evidence`: `strict`, `balanced`, or `relaxed`
+- `autonomy.policies.steering`: `steady` or `interactive`
+
+Recommended defaults:
+
+- `delivery`: strict approval, validate on drift, strict evidence, steady steering
+- `explore`: draft approval, continue on drift, relaxed evidence, interactive steering
+- `custom`: delivery-shaped baseline with explicit overrides
 
 ## Packaging Model
 

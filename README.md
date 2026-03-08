@@ -180,6 +180,7 @@ Current Otto capabilities include:
 - workflow monitoring, failure budgets, and persisted run state
 - fresh-session continuation with checkpoint-based dive and fork tools
 - layered JSON preferences from `.otto.json`, `.pi/otto.json`, legacy autopilot config files, and `OTTO_CONFIG`/`BMAD_AUTOPILOT_CONFIG`
+- formalized `delivery`, `explore`, and `custom` autonomy modes with explicit approval, drift, evidence, and steering defaults
 - per-workflow execution modes such as `party` for higher-steering workflows
 - a packaged `otto` SKILL resource for Pi agents
 

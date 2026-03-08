@@ -33,6 +33,11 @@ type WorkflowCommand =
   | "/bmad:bmm:code-review";
 
 type WorkflowMode = "accept-default" | "party";
+type OperatingMode = "delivery" | "explore" | "custom";
+type ApprovalPolicy = "strict" | "balanced" | "draft";
+type DriftPolicy = "validate" | "continue" | "pause";
+type EvidencePolicy = "strict" | "balanced" | "relaxed";
+type SteeringPolicy = "steady" | "interactive";
 type ActionKind =
   | "review"
   | "implementation"
@@ -66,10 +71,27 @@ interface AutopilotPreferences {
     maxFailures?: number;
     freshSessionBetweenSteps?: boolean;
   };
+  autonomy?: {
+    mode?: OperatingMode;
+    policies?: {
+      approval?: ApprovalPolicy;
+      drift?: DriftPolicy;
+      evidence?: EvidencePolicy;
+      steering?: SteeringPolicy;
+    };
+  };
   workflows?: {
     defaultMode?: WorkflowMode;
     commandModes?: Partial<Record<WorkflowCommand, WorkflowMode>>;
   };
+}
+
+interface ResolvedAutonomy {
+  mode: OperatingMode;
+  approval: ApprovalPolicy;
+  drift: DriftPolicy;
+  evidence: EvidencePolicy;
+  steering: SteeringPolicy;
 }
 
 interface LoadedPreferences {
@@ -96,6 +118,7 @@ type PreferenceChoice<T> = {
 };
 
 type WorkflowPreferenceOverride = WorkflowMode | "inherit";
+type PolicyOverride<T extends string> = T | "inherit";
 
 interface PreferenceCandidate {
   label: string;
@@ -167,6 +190,8 @@ interface RunState {
   lastEvidenceAlert: string | null;
   lastEvidenceSignals: string[];
   lastCommandMode: WorkflowMode;
+  lastAutonomyMode: OperatingMode;
+  lastPolicySummary: string;
   lastContinuation: ContinuityKind;
   lastContinuationReason: string | null;
   lastIssueId: string | null;
@@ -203,6 +228,9 @@ const newRunState = (): RunState => ({
   lastEvidenceAlert: null,
   lastEvidenceSignals: [],
   lastCommandMode: "accept-default",
+  lastAutonomyMode: "delivery",
+  lastPolicySummary:
+    "approval=strict, drift=validate, evidence=strict, steering=steady",
   lastContinuation: "none",
   lastContinuationReason: null,
   lastIssueId: null,
@@ -223,6 +251,93 @@ const newRunState = (): RunState => ({
 
 const newWorkflowToken = (): string =>
   `otto-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+const MODE_DEFAULTS: Record<
+  Exclude<OperatingMode, "custom">,
+  AutopilotPreferences
+> = {
+  delivery: {
+    defaults: {
+      skipInit: false,
+      maxIterations: 25,
+      maxFailures: 3,
+      freshSessionBetweenSteps: true,
+    },
+    autonomy: {
+      mode: "delivery",
+      policies: {
+        approval: "strict",
+        drift: "validate",
+        evidence: "strict",
+        steering: "steady",
+      },
+    },
+    workflows: {
+      defaultMode: "accept-default",
+      commandModes: {
+        "/bmad:bmm:create-architecture": "party",
+        "/bmad:bmm:create-epics-and-stories": "party",
+        "/bmad:td:validate-prd": "party",
+      },
+    },
+  },
+  explore: {
+    defaults: {
+      skipInit: true,
+      maxIterations: 15,
+      maxFailures: 5,
+      freshSessionBetweenSteps: false,
+    },
+    autonomy: {
+      mode: "explore",
+      policies: {
+        approval: "draft",
+        drift: "continue",
+        evidence: "relaxed",
+        steering: "interactive",
+      },
+    },
+    workflows: {
+      defaultMode: "party",
+      commandModes: {
+        "/bmad:td:validate-prd": "party",
+      },
+    },
+  },
+};
+
+const policySummary = (autonomy: ResolvedAutonomy): string =>
+  `approval=${autonomy.approval}, drift=${autonomy.drift}, evidence=${autonomy.evidence}, steering=${autonomy.steering}`;
+
+const resolveAutonomy = (
+  preferences: AutopilotPreferences,
+): ResolvedAutonomy => {
+  const mode = preferences.autonomy?.mode ?? "delivery";
+  const policyDefaults =
+    mode === "explore"
+      ? MODE_DEFAULTS.explore.autonomy?.policies
+      : MODE_DEFAULTS.delivery.autonomy?.policies;
+
+  return {
+    mode,
+    approval:
+      preferences.autonomy?.policies?.approval ??
+      policyDefaults?.approval ??
+      "strict",
+    drift:
+      preferences.autonomy?.policies?.drift ??
+      policyDefaults?.drift ??
+      "validate",
+    evidence:
+      preferences.autonomy?.policies?.evidence ??
+      policyDefaults?.evidence ??
+      "strict",
+    steering:
+      preferences.autonomy?.policies?.steering ??
+      policyDefaults?.steering ??
+      "steady",
+  };
+};
 
 const checkpointLabel = (checkpoint: Checkpoint): string => {
   const checkpointIssue = currentIssueLabel(
@@ -408,6 +523,14 @@ const mergePreferences = (
     ...(base.defaults ?? {}),
     ...(incoming.defaults ?? {}),
   },
+  autonomy: {
+    ...(base.autonomy ?? {}),
+    ...(incoming.autonomy ?? {}),
+    policies: {
+      ...(base.autonomy?.policies ?? {}),
+      ...(incoming.autonomy?.policies ?? {}),
+    },
+  },
   workflows: {
     ...(base.workflows ?? {}),
     ...(incoming.workflows ?? {}),
@@ -422,12 +545,44 @@ const normalizePreferences = (
   preferences: AutopilotPreferences,
 ): AutopilotPreferences => {
   const defaults = preferences.defaults ?? {};
+  const autonomy = preferences.autonomy ?? {};
   const workflows = preferences.workflows ?? {};
+  const normalizedMode =
+    autonomy.mode === "delivery" ||
+    autonomy.mode === "explore" ||
+    autonomy.mode === "custom"
+      ? autonomy.mode
+      : undefined;
   const commandModes = Object.fromEntries(
     Object.entries(workflows.commandModes ?? {}).filter(
       ([, mode]) => mode === "accept-default" || mode === "party",
     ),
   ) as Partial<Record<WorkflowCommand, WorkflowMode>>;
+  const policies = autonomy.policies ?? {};
+  const normalizedPolicies = {
+    approval:
+      policies.approval === "strict" ||
+      policies.approval === "balanced" ||
+      policies.approval === "draft"
+        ? policies.approval
+        : undefined,
+    drift:
+      policies.drift === "validate" ||
+      policies.drift === "continue" ||
+      policies.drift === "pause"
+        ? policies.drift
+        : undefined,
+    evidence:
+      policies.evidence === "strict" ||
+      policies.evidence === "balanced" ||
+      policies.evidence === "relaxed"
+        ? policies.evidence
+        : undefined,
+    steering:
+      policies.steering === "steady" || policies.steering === "interactive"
+        ? policies.steering
+        : undefined,
+  };
 
   const normalized: AutopilotPreferences = {};
 
@@ -444,6 +599,39 @@ const normalizePreferences = (
         : {}),
       ...(defaults.freshSessionBetweenSteps !== undefined
         ? { freshSessionBetweenSteps: defaults.freshSessionBetweenSteps }
+        : {}),
+    };
+  }
+
+  if (
+    normalizedMode !== undefined ||
+    normalizedPolicies.approval !== undefined ||
+    normalizedPolicies.drift !== undefined ||
+    normalizedPolicies.evidence !== undefined ||
+    normalizedPolicies.steering !== undefined
+  ) {
+    normalized.autonomy = {
+      ...(normalizedMode !== undefined ? { mode: normalizedMode } : {}),
+      ...(normalizedPolicies.approval !== undefined ||
+      normalizedPolicies.drift !== undefined ||
+      normalizedPolicies.evidence !== undefined ||
+      normalizedPolicies.steering !== undefined
+        ? {
+            policies: {
+              ...(normalizedPolicies.approval !== undefined
+                ? { approval: normalizedPolicies.approval }
+                : {}),
+              ...(normalizedPolicies.drift !== undefined
+                ? { drift: normalizedPolicies.drift }
+                : {}),
+              ...(normalizedPolicies.evidence !== undefined
+                ? { evidence: normalizedPolicies.evidence }
+                : {}),
+              ...(normalizedPolicies.steering !== undefined
+                ? { steering: normalizedPolicies.steering }
+                : {}),
+            },
+          }
         : {}),
     };
   }
@@ -564,9 +752,26 @@ const onboardingWorkflowOverride = async (
     },
   ]);
 
+const onboardingPolicyOverride = async <T extends string>(
+  ctx: ExtensionCommandContext,
+  title: string,
+  inheritLabel: string,
+  options: PreferenceChoice<T>[],
+): Promise<PolicyOverride<T> | null> =>
+  onboardingChoice<PolicyOverride<T>>(ctx, title, [
+    {
+      label: `Inherit mode default | ${inheritLabel}`,
+      value: "inherit",
+    },
+    ...options,
+  ]);
+
 const onboardingSummary = (preferences: AutopilotPreferences): string[] => {
+  const autonomy = resolveAutonomy(preferences);
   const overrides = Object.entries(preferences.workflows?.commandModes ?? {});
   return [
+    `Operating mode: ${autonomy.mode}`,
+    `Policies: ${policySummary(autonomy)}`,
     `Skip init: ${preferences.defaults?.skipInit ? "yes" : "no"}`,
     `Max iterations: ${preferences.defaults?.maxIterations ?? 25}`,
     `Max failures: ${preferences.defaults?.maxFailures ?? 3}`,
@@ -587,44 +792,20 @@ const runOnboarding = async (
   const current = loadAutopilotPreferences().preferences;
   const profile = await onboardingChoice(ctx, "Otto profile", [
     {
-      label: "Delivery | fresh-session, steady defaults",
-      value: {
-        defaults: {
-          skipInit: false,
-          maxIterations: 25,
-          maxFailures: 3,
-          freshSessionBetweenSteps: true,
-        },
-        workflows: {
-          defaultMode: "accept-default" as WorkflowMode,
-        },
-      },
+      label: "Delivery | strict approval, validate on drift",
+      value: MODE_DEFAULTS.delivery,
     },
     {
-      label: "Balanced | longer runs, same review bar",
-      value: {
-        defaults: {
-          skipInit: false,
-          maxIterations: 40,
-          maxFailures: 4,
-          freshSessionBetweenSteps: true,
-        },
-        workflows: {
-          defaultMode: "accept-default" as WorkflowMode,
-        },
-      },
+      label: "Explore | interactive steering, lighter evidence gate",
+      value: MODE_DEFAULTS.explore,
     },
     {
-      label: "Explore | fewer resets, more operator steering",
+      label: "Custom | tune policies and workflow steering",
       value: {
-        defaults: {
-          skipInit: true,
-          maxIterations: 15,
-          maxFailures: 5,
-          freshSessionBetweenSteps: false,
-        },
-        workflows: {
-          defaultMode: "party" as WorkflowMode,
+        ...MODE_DEFAULTS.delivery,
+        autonomy: {
+          ...MODE_DEFAULTS.delivery.autonomy,
+          mode: "custom" as OperatingMode,
         },
       },
     },
@@ -634,6 +815,8 @@ const runOnboarding = async (
     },
   ]);
   if (!profile) return null;
+
+  const profileMode = profile.autonomy?.mode ?? "delivery";
 
   const skipInit = await onboardingChoice(ctx, "Initialize before looping", [
     { label: "Run initialize first", value: false },
@@ -682,6 +865,86 @@ const runOnboarding = async (
   ]);
   if (!defaultMode) return null;
 
+  const approvalPolicy = await onboardingPolicyOverride<ApprovalPolicy>(
+    ctx,
+    "Approval policy",
+    profileMode,
+    [
+      {
+        label: "Strict approval | require real target-surface evidence",
+        value: "strict",
+      },
+      {
+        label: "Balanced approval | allow partial evidence with callouts",
+        value: "balanced",
+      },
+      {
+        label: "Draft approval | exploratory proof is acceptable",
+        value: "draft",
+      },
+    ],
+  );
+  if (!approvalPolicy) return null;
+
+  const driftPolicy = await onboardingPolicyOverride<DriftPolicy>(
+    ctx,
+    "Drift handling",
+    profileMode,
+    [
+      {
+        label: "Validate on drift | route to validate-prd immediately",
+        value: "validate",
+      },
+      {
+        label: "Continue on drift | warn and keep moving",
+        value: "continue",
+      },
+      {
+        label: "Pause on drift | hand control back to operator",
+        value: "pause",
+      },
+    ],
+  );
+  if (!driftPolicy) return null;
+
+  const evidencePolicy = await onboardingPolicyOverride<EvidencePolicy>(
+    ctx,
+    "Evidence threshold",
+    profileMode,
+    [
+      {
+        label: "Strict evidence | validate any weak completion signal",
+        value: "strict",
+      },
+      {
+        label: "Balanced evidence | validate meaningful gaps",
+        value: "balanced",
+      },
+      {
+        label: "Relaxed evidence | reserve validation for severe drift",
+        value: "relaxed",
+      },
+    ],
+  );
+  if (!evidencePolicy) return null;
+
+  const steeringPolicy = await onboardingPolicyOverride<SteeringPolicy>(
+    ctx,
+    "Workflow steering",
+    profileMode,
+    [
+      {
+        label: "Steady steering | minimize pauses and prompts",
+        value: "steady",
+      },
+      {
+        label: "Interactive steering | surface pivots and tradeoffs early",
+        value: "interactive",
+      },
+    ],
+  );
+  if (!steeringPolicy) return null;
+
   const architectureMode = await onboardingWorkflowOverride(
     ctx,
     "/bmad:bmm:create-architecture",
@@ -711,6 +974,19 @@ const runOnboarding = async (
       maxIterations,
       maxFailures,
       freshSessionBetweenSteps,
+    },
+    autonomy: {
+      ...(profile.autonomy ?? {}),
+      mode: profileMode,
+      policies: {
+        ...((profile.autonomy?.policies ?? {}) as NonNullable<
+          AutopilotPreferences["autonomy"]
+        >["policies"]),
+        ...(approvalPolicy !== "inherit" ? { approval: approvalPolicy } : {}),
+        ...(driftPolicy !== "inherit" ? { drift: driftPolicy } : {}),
+        ...(evidencePolicy !== "inherit" ? { evidence: evidencePolicy } : {}),
+        ...(steeringPolicy !== "inherit" ? { steering: steeringPolicy } : {}),
+      },
     },
     workflows: {
       ...(profile.workflows ?? {}),
@@ -746,21 +1022,54 @@ const workflowModeFor = (
 ): WorkflowMode =>
   preferences.workflows?.commandModes?.[command] ??
   preferences.workflows?.defaultMode ??
-  "accept-default";
+  (resolveAutonomy(preferences).mode === "explore"
+    ? "party"
+    : "accept-default");
 
-const evidenceDiscipline = [
-  "- Follow Otto's evidence hierarchy when judging completion: 1) real runtime behavior, 2) direct PRD or requirement validation, 3) human review of the working product, 4) automated tests and checks, 5) workflow or artifact completion signals.",
-  "- For approval-grade implementation or review work, explicitly map changed behavior to PRD, story, or issue requirements and say which requirements are fully evidenced versus still partial.",
-  "- Call out any simulated, mocked, placeholder, synthetic, or artifact-only success signals instead of treating them as equivalent to real target-surface evidence.",
-  "- If completion signals look strong but evidence from the real target surface is weak, mark the result as weak evidence, lower confidence, explain the gap, and create or recommend concrete follow-up td work when the workflow permits.",
-  "- Include a machine-checkable evidence section in the response covering validation context, changed files, gate results, artifact references or transcripts, requirement mapping, risks, and follow-ups.",
-];
+const evidenceDiscipline = (autonomy: ResolvedAutonomy): string[] => {
+  const lines = [
+    "- Follow Otto's evidence hierarchy when judging completion: 1) real runtime behavior, 2) direct PRD or requirement validation, 3) human review of the working product, 4) automated tests and checks, 5) workflow or artifact completion signals.",
+    "- Call out any simulated, mocked, placeholder, synthetic, or artifact-only success signals instead of treating them as equivalent to real target-surface evidence.",
+    "- Include a machine-checkable evidence section in the response covering validation context, changed files, gate results, artifact references or transcripts, requirement mapping, risks, and follow-ups.",
+  ];
+
+  if (autonomy.approval === "strict") {
+    lines.push(
+      "- Treat approval-grade implementation or review work as strict approval: require explicit requirement mapping, real target-surface evidence when applicable, and a clear weak-evidence callout when runtime proof is missing.",
+    );
+  } else if (autonomy.approval === "balanced") {
+    lines.push(
+      "- Treat approval-grade work as balanced approval: map changed behavior to requirements, distinguish fully evidenced behavior from partial evidence, and call out what still needs stronger runtime proof.",
+    );
+  } else {
+    lines.push(
+      "- Treat approval claims as draft-grade: keep the requirement mapping, but you may leave work explicitly in exploratory or low-confidence status when runtime proof is still thin.",
+    );
+  }
+
+  if (autonomy.evidence === "strict") {
+    lines.push(
+      "- Use a strict evidence threshold: if completion signals look strong but target-surface evidence is weak, lower confidence, mark the result as weak evidence, and steer toward validation or follow-up work.",
+    );
+  } else if (autonomy.evidence === "balanced") {
+    lines.push(
+      "- Use a balanced evidence threshold: accept partial progress, but explicitly separate runtime-confirmed behavior from artifact-only or inferred behavior.",
+    );
+  } else {
+    lines.push(
+      "- Use a relaxed evidence threshold for exploration: keep weak-evidence callouts visible, but avoid overstating certainty and reserve hard escalation for clear drift or placeholder-heavy delivery.",
+    );
+  }
+
+  return lines;
+};
 
 const workflowPrompt = (
   command: WorkflowCommand,
   preferences: AutopilotPreferences,
   token: string,
 ): string => {
+  const autonomy = resolveAutonomy(preferences);
   const workflow =
     command === "/bmad:td:initialize"
       ? {
@@ -822,14 +1131,21 @@ const workflowPrompt = (
     "- Follow workflow instructions directly and perform actions, not just explain them.",
     "- Prefer accept-default behavior and avoid unnecessary prompts.",
     `- ${workflow.extra}`,
+    `- Operating mode: ${autonomy.mode}. Policy bundle: ${policySummary(autonomy)}.`,
     `- Workflow token: ${token}. Carry it through this run and include it unchanged in the final OTTO_RESULT JSON as key token.`,
     "- Report concrete actions taken, artifacts touched, and td outcomes.",
-    ...evidenceDiscipline,
+    ...evidenceDiscipline(autonomy),
     `- End your final response with exactly one line starting with ${RESULT_PREFIX} followed by valid single-line JSON with keys: command, token, action, issueId, issueTitle, outcome, confidence, summary. Use null for issueTitle when no td title applies.`,
     "- Use action from: review, implementation, requirements-validation, epic-workflow, unknown.",
     "- Use outcome from: completed, blocked, needs-input, no-work, failed, unknown.",
     "- Use confidence from: high, medium, low, unknown.",
   ];
+
+  if (autonomy.steering === "interactive") {
+    executionRequirements.push(
+      "- Use interactive steering: surface major pivots, assumptions, and tradeoffs early, especially before architecture, planning, or validation decisions that could redirect the run.",
+    );
+  }
 
   if (workflowModeFor(command, preferences) === "party") {
     executionRequirements.push(
@@ -908,7 +1224,9 @@ export default function otto(pi: ExtensionAPI) {
       `Current td: ${currentIssue}`,
       `Action: ${state.lastAction ?? "-"}`,
       `Why: ${widgetReasonLabel(state.lastDecisionReason)}`,
-      `Mode: ${state.lastCommandMode}`,
+      `Operating mode: ${state.lastAutonomyMode}`,
+      `Policies: ${state.lastPolicySummary}`,
+      `Workflow mode: ${state.lastCommandMode}`,
       `Confidence: ${state.lastConfidence}`,
       `Continuity: ${continuityLabel(state.lastContinuation, state.lastContinuationReason)}`,
       `Phase: ${state.phase}`,
@@ -993,6 +1311,7 @@ export default function otto(pi: ExtensionAPI) {
     if (error) {
       state.lastError = `Preference load failed (${source}): ${error}`;
     }
+    const autonomy = resolveAutonomy(preferences);
     const token = newWorkflowToken();
     const prompt = workflowPrompt(
       command as WorkflowCommand,
@@ -1010,6 +1329,8 @@ export default function otto(pi: ExtensionAPI) {
     state.awaitingStarted = false;
     state.lastCommand = command;
     state.lastCommandMode = mode;
+    state.lastAutonomyMode = autonomy.mode;
+    state.lastPolicySummary = policySummary(autonomy);
     state.lastDecisionReason = shortText(reason, 160);
     state.lastProgressAt = Date.now();
     persistState(`queued:${command}`);
@@ -1240,7 +1561,11 @@ export default function otto(pi: ExtensionAPI) {
     );
     const workflowResult = resolvedWorkflowResult.result;
     const summary = resolvedWorkflowResult.summary;
-    const evidence = inspectEvidence(assistantText, workflowResult);
+    const evidence = inspectEvidence(
+      assistantText,
+      workflowResult,
+      resolveAutonomy(loadAutopilotPreferences().preferences).evidence,
+    );
     const entryId = ctx.sessionManager.getLeafId();
     const issueId = workflowResult?.issueId ?? parseIssueId(assistantText);
     const issueTitle =
@@ -1363,6 +1688,7 @@ export default function otto(pi: ExtensionAPI) {
     let hasInReview = false;
     try {
       const workState = await hasRemainingWork();
+      const autonomy = resolveAutonomy(loadAutopilotPreferences().preferences);
       workLeft = workState.hasImmediateWork;
       hasInReview = workState.hasInReview;
       state.queueState = workLeft
@@ -1397,6 +1723,33 @@ export default function otto(pi: ExtensionAPI) {
 
         if (ctx.hasUI) {
           ctx.ui.notify(tdDriftReason, "warning");
+        }
+
+        if (
+          autonomy.drift === "pause" &&
+          completedCommand !== VALIDATE_PRD_COMMAND
+        ) {
+          stopRun(
+            ctx,
+            "paused",
+            `${tdDriftReason} Drift policy is pause.`,
+            "paused-for-input",
+          );
+          return;
+        }
+
+        if (
+          autonomy.drift === "validate" &&
+          completedCommand !== VALIDATE_PRD_COMMAND
+        ) {
+          state.queueState = "drained-ready-for-validation";
+          persistState("loop-run-validate-prd-td-drift");
+          queueWorkflowCommand(
+            ctx,
+            VALIDATE_PRD_COMMAND,
+            `${tdDriftReason} Drift policy is validate, so check product truth before continuing.`,
+          );
+          return;
         }
       }
     } catch (error) {
@@ -1692,7 +2045,9 @@ export default function otto(pi: ExtensionAPI) {
       `Current td: ${currentIssueLabel(state.lastIssueId, state.lastIssueTitle)}`,
       `Action: ${state.lastAction ?? "-"}`,
       `Why: ${widgetReasonLabel(state.lastDecisionReason)}`,
-      `Mode: ${state.lastCommandMode}`,
+      `Operating mode: ${state.lastAutonomyMode}`,
+      `Policies: ${state.lastPolicySummary}`,
+      `Workflow mode: ${state.lastCommandMode}`,
       `Phase: ${state.phase}`,
       `Active: ${state.active ? "yes" : "no"}`,
       `Iteration: ${state.iteration}/${state.maxIterations}`,
