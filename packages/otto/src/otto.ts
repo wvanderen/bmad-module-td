@@ -733,6 +733,14 @@ const workflowModeFor = (
   preferences.workflows?.defaultMode ??
   "accept-default";
 
+const evidenceDiscipline = [
+  "- Follow Otto's evidence hierarchy when judging completion: 1) real runtime behavior, 2) direct PRD or requirement validation, 3) human review of the working product, 4) automated tests and checks, 5) workflow or artifact completion signals.",
+  "- For approval-grade implementation or review work, explicitly map changed behavior to PRD, story, or issue requirements and say which requirements are fully evidenced versus still partial.",
+  "- Call out any simulated, mocked, placeholder, synthetic, or artifact-only success signals instead of treating them as equivalent to real target-surface evidence.",
+  "- If completion signals look strong but evidence from the real target surface is weak, mark the result as weak evidence, lower confidence, explain the gap, and create or recommend concrete follow-up td work when the workflow permits.",
+  "- Include a machine-checkable evidence section in the response covering validation context, changed files, gate results, artifact references or transcripts, requirement mapping, risks, and follow-ups.",
+];
+
 const workflowPrompt = (
   command: WorkflowCommand,
   preferences: AutopilotPreferences,
@@ -801,6 +809,7 @@ const workflowPrompt = (
     `- ${workflow.extra}`,
     `- Workflow token: ${token}. Carry it through this run and include it unchanged in the final OTTO_RESULT JSON as key token.`,
     "- Report concrete actions taken, artifacts touched, and td outcomes.",
+    ...evidenceDiscipline,
     `- End your final response with exactly one line starting with ${RESULT_PREFIX} followed by valid single-line JSON with keys: command, token, action, issueId, issueTitle, outcome, confidence, summary. Use null for issueTitle when no td title applies.`,
     "- Use action from: review, implementation, requirements-validation, epic-workflow, unknown.",
     "- Use outcome from: completed, blocked, needs-input, no-work, failed, unknown.",

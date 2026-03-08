@@ -42,3 +42,5 @@ Otto prefers `.pi/otto.json` and `OTTO_CONFIG`, while still supporting `.bmad-au
 - Keep fresh-session continuation enabled unless the operator explicitly wants same-session compaction.
 - Use `party` mode selectively for workflows that benefit from higher steering, such as architecture or PRD validation.
 - Trust runtime evidence, PRD validation, and td state over workflow-completion phrasing alone.
+- Use Otto's evidence hierarchy in this order: runtime behavior, direct PRD/requirement validation, human review, automated checks, then workflow/artifact completion.
+- For approval-grade work, require explicit requirement mapping, real target-surface evidence when applicable, and a clear weak-evidence callout when runtime proof is missing.

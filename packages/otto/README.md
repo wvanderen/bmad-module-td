@@ -55,6 +55,13 @@ Otto trusts evidence in this order:
 
 That means passing tests can support a claim, but they should not outweigh weak product truth.
 
+Approval-grade next-step and review work should also include:
+
+- explicit mapping from changed behavior to PRD, story, or issue requirements
+- clear labeling for simulated, mocked, placeholder, or artifact-only success signals
+- machine-checkable evidence output covering validation context, changed files, gate results, artifact references, risks, and follow-up td work
+- downgraded confidence and explicit weak-evidence handling when runtime proof is missing
+
 ## Current Capabilities
 
 Otto currently provides:

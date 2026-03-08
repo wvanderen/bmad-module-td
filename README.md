@@ -94,6 +94,7 @@ UI-impacting `web` and `hybrid` work must carry visual evidence as part of valid
 Validation evidence should stay machine-checkable across implementations and reviews.
 
 - Required fields: validation context, changed files, gate results, artifact references, confidence, risks, and follow-up issues.
+- Approval-grade work should also map changed behavior to PRD, story, or issue requirements and explicitly distinguish real runtime evidence from mocked, simulated, placeholder, or artifact-only signals.
 - Web UI work: include screenshot paths or URLs and visual check outputs.
 - CLI/TUI work: include representative command transcripts, terminal captures, or equivalent runtime evidence.
 
