@@ -107,6 +107,32 @@ assert.deepEqual(
     effectiveConfidence: "high",
   },
 );
+assert.deepEqual(
+  inspectEvidence(
+    "Implemented placeholder and simulated-success detection for Otto.",
+    { outcome: "completed", confidence: "high" },
+  ),
+  {
+    signals: [],
+    alert: null,
+    completedLike: true,
+    shouldValidate: false,
+    effectiveConfidence: "high",
+  },
+);
+assert.deepEqual(
+  inspectEvidence(
+    "Completed td-7ba2f2 by adding simulated-success detection and td drift handling.",
+    { outcome: "completed", confidence: "high" },
+  ),
+  {
+    signals: [],
+    alert: null,
+    completedLike: true,
+    shouldValidate: false,
+    effectiveConfidence: "high",
+  },
+);
 assert.equal(parseIssueId("Focus td-abc123 then continue."), "td-abc123");
 assert.equal(parseIssueId("No issue present."), null);
 assert.equal(

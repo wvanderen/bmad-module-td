@@ -171,7 +171,7 @@ const EVIDENCE_PATTERNS = [
     signal: "placeholder-success",
     alert: "placeholder success",
     pattern:
-      /\b(?:placeholder|mock(?:ed)?|simulat(?:ed|ion)|synthetic|stub(?:bed)?|fake|artifact-only|scaffold-heavy|demo-only)\b/i,
+      /\b(?:still placeholder-heavy|placeholder-heavy delivery|placeholder success|mock(?:ed)? success|simulat(?:ed|ion) success|synthetic success|stub(?:bed)? success|fake success|artifact-only success|scaffold-heavy delivery|demo-only delivery|product core is still missing|core loop not real yet)\b/i,
   },
   {
     signal: "runtime-gap",
@@ -189,7 +189,7 @@ const EVIDENCE_PATTERNS = [
     signal: "result-drift",
     alert: "result drift",
     pattern:
-      /\b(?:drift|false completion|workflow completion diverges|diverges? from (?:actual )?(?:prd|product truth)|product truth.*drift)\b/i,
+      /\b(?:false completion|workflow completion diverges|workflow result drift|td drift(?!\s+(?:handling|detection|detector|policy|policies|checks?|heuristics?|logic|support))|diverges? from (?:actual )?(?:prd|product truth)|product truth.*drift)\b/i,
   },
 ];
 
