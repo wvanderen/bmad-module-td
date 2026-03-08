@@ -42,6 +42,15 @@ assert.equal(mismatchedToken.resultSource, "mismatched");
 assert.equal(mismatchedToken.result, null);
 assert.match(mismatchedToken.error ?? "", /token mismatch/);
 
+const missingToken = resolveWorkflowResult(
+  'OTTO_RESULT {"command":"/bmad:td:next-step","action":"review","issueId":"td-123abc","issueTitle":"Current td UI should include title","outcome":"completed","confidence":"high","summary":"Completed td-123abc and queued review."}',
+  "/bmad:td:next-step",
+  "otto-test-token",
+);
+assert.equal(missingToken.resultSource, "malformed");
+assert.equal(missingToken.result, null);
+assert.equal(missingToken.error, "Malformed OTTO_RESULT payload.");
+
 const malformed = resolveWorkflowResult(
   'OTTO_RESULT {"command": }',
   "/bmad:td:next-step",

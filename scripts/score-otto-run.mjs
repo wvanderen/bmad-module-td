@@ -13,6 +13,7 @@ const REQUIRED_METRICS = [
   ["nextStep", "total"],
   ["nextStep", "agreed"],
   ["nextStep", "disagreed"],
+  ["nextStep", "uncertain"],
   ["queue", "initialReady"],
   ["queue", "completed"],
   ["queue", "approved"],
@@ -20,6 +21,7 @@ const REQUIRED_METRICS = [
   ["truthGaps", "detectedBeforeApproval"],
   ["truthGaps", "escapedFalseCompletion"],
   ["continuity", "sessionHopSuccesses"],
+  ["continuity", "sessionHopAttempts"],
   ["continuity", "compactionsUsed"],
   ["oversight", "humanInterventions"],
 ];

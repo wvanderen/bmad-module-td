@@ -137,20 +137,28 @@ export const parseWorkflowResult = (assistantText) => {
         ? parsed.token.trim()
         : null;
 
+    if (
+      typeof parsed.command !== "string" ||
+      parsed.command.trim().length === 0
+    ) {
+      return { result: null, malformed: true };
+    }
+
+    if (!token) {
+      return { result: null, malformed: true };
+    }
+
     return {
-      result:
-        typeof parsed.command === "string" && parsed.command.trim().length > 0
-          ? {
-              command: parsed.command,
-              token,
-              action,
-              issueId,
-              issueTitle,
-              outcome,
-              confidence,
-              summary,
-            }
-          : null,
+      result: {
+        command: parsed.command,
+        token,
+        action,
+        issueId,
+        issueTitle,
+        outcome,
+        confidence,
+        summary,
+      },
       malformed: false,
     };
   } catch {

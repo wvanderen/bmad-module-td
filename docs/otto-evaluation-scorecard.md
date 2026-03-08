@@ -63,12 +63,14 @@ These thresholds map the roadmap goals into something a real dry run can pass or
 - `nextStep.total`
 - `nextStep.agreed`
 - `nextStep.disagreed`
+- `nextStep.uncertain`
 - `queue.initialReady`
 - `queue.completed`
 - `queue.approved`
 - `queue.reopened`
 - `truthGaps.detectedBeforeApproval`
 - `truthGaps.escapedFalseCompletion`
+- `continuity.sessionHopAttempts`
 - `continuity.sessionHopSuccesses`
 - `continuity.compactionsUsed`
 - `oversight.humanInterventions`
