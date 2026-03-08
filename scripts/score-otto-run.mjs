@@ -37,6 +37,15 @@ const FLAG_CAUTION_LABELS = {
   continuityFeltBlurry: "continuity quality degraded due to blurry context",
 };
 
+const ROADMAP_THRESHOLDS = {
+  decisionAgreement: 0.8,
+  queueDrainRate: 0.75,
+  approvalRate: 0.8,
+  truthGapCatchRate: 1,
+  sessionHopSuccessRate: 0.75,
+  humanInterventionsMax: 2,
+};
+
 const formatNumber = (value) =>
   Number.isInteger(value) ? String(value) : value.toFixed(1);
 
@@ -162,6 +171,54 @@ const sessionHopSuccessRate = ratio(
   getNested(metrics, ["continuity", "sessionHopSuccesses"]),
   getNested(metrics, ["continuity", "sessionHopAttempts"]),
 );
+const humanInterventions = getNested(metrics, [
+  "oversight",
+  "humanInterventions",
+]);
+
+const roadmapTargets = {
+  decisionAgreement: {
+    actual: decisionAgreement,
+    threshold: ROADMAP_THRESHOLDS.decisionAgreement,
+    pass:
+      decisionAgreement !== null &&
+      decisionAgreement >= ROADMAP_THRESHOLDS.decisionAgreement,
+  },
+  queueDrainRate: {
+    actual: queueDrainRate,
+    threshold: ROADMAP_THRESHOLDS.queueDrainRate,
+    pass:
+      queueDrainRate !== null &&
+      queueDrainRate >= ROADMAP_THRESHOLDS.queueDrainRate,
+  },
+  approvalRate: {
+    actual: approvalRate,
+    threshold: ROADMAP_THRESHOLDS.approvalRate,
+    pass:
+      approvalRate !== null && approvalRate >= ROADMAP_THRESHOLDS.approvalRate,
+  },
+  truthGapCatchRate: {
+    actual: truthGapCatchRate,
+    threshold: ROADMAP_THRESHOLDS.truthGapCatchRate,
+    pass:
+      truthGapCatchRate !== null &&
+      truthGapCatchRate >= ROADMAP_THRESHOLDS.truthGapCatchRate,
+  },
+  sessionHopSuccessRate: {
+    actual: sessionHopSuccessRate,
+    threshold: ROADMAP_THRESHOLDS.sessionHopSuccessRate,
+    pass:
+      sessionHopSuccessRate !== null &&
+      sessionHopSuccessRate >= ROADMAP_THRESHOLDS.sessionHopSuccessRate,
+  },
+  humanInterventions: {
+    actual: humanInterventions,
+    threshold: ROADMAP_THRESHOLDS.humanInterventionsMax,
+    pass:
+      typeof humanInterventions === "number" &&
+      humanInterventions <= ROADMAP_THRESHOLDS.humanInterventionsMax,
+  },
+};
 
 const hardFails = Object.entries(HARD_FAIL_LABELS)
   .filter(([key]) => flags[key] === true)
@@ -233,6 +290,7 @@ const result = {
     truthGapCatchRate,
     sessionHopSuccessRate,
   },
+  roadmapTargets,
   metrics,
 };
 
@@ -270,6 +328,24 @@ console.log(
 console.log(
   `- sessionHopSuccessRate: ${sessionHopSuccessRate === null ? "n/a" : formatNumber(sessionHopSuccessRate * 100)}%`,
 );
+
+console.log("");
+console.log("Roadmap targets:");
+for (const [label, target] of Object.entries(result.roadmapTargets)) {
+  const actual =
+    target.actual === null || typeof target.actual === "undefined"
+      ? "n/a"
+      : label === "humanInterventions"
+        ? formatNumber(target.actual)
+        : `${formatNumber(target.actual * 100)}%`;
+  const threshold =
+    label === "humanInterventions"
+      ? `<= ${formatNumber(target.threshold)}`
+      : `>= ${formatNumber(target.threshold * 100)}%`;
+  console.log(
+    `- ${label}: ${target.pass ? "pass" : "miss"} (${actual}; target ${threshold})`,
+  );
+}
 
 if (hardFails.length > 0) {
   console.log("");

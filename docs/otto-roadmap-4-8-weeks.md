@@ -19,6 +19,21 @@ Track progress with this composite:
 - queue-drain rate with acceptable review outcomes
 - rate of catching PRD or runtime truth gaps before false completion
 
+Roadmap targets for a passing dry run:
+
+- next-step decision agreement at or above 80%
+- queue-drain rate at or above 75%
+- approval rate on completed work at or above 80%
+- PRD or runtime truth-gap catch rate at 100%
+- session-hop success rate at or above 75%
+- no more than 2 human interventions per run
+
+Interpret the composite as follows:
+
+- decision agreement shows whether Otto is choosing the right work often enough
+- queue-drain plus approval rate shows whether Otto is turning ready work into reviewable progress without creating rework debt
+- truth-gap catch rate is the safety metric: if it drops below 100%, the run is not roadmap-successful even if velocity looks good
+
 Supporting indicators:
 
 - fewer loop failures caused by orchestration brittleness
@@ -216,3 +231,10 @@ Use a short weekly review against these questions:
 - Did it produce stronger evidence for approval-quality work?
 - Did it catch any false-completion patterns earlier than before?
 - Did a power user need less babysitting to get meaningful progress?
+
+For each real Otto dry run:
+
+1. fill in `templates/otto-evaluation-scorecard.template.json`
+2. run `npm run score:otto-run -- <filled-scorecard.json>`
+3. record the score, caution flags, and missed targets in the roadmap notes
+4. convert repeated misses into the next roadmap tasks

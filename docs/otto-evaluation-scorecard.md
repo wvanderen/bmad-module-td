@@ -37,6 +37,19 @@ npm run score:otto-run -- templates/otto-evaluation-scorecard.template.json --js
 
 The scorecard uses both weighted section scores and computed operational metrics.
 
+## Roadmap thresholds
+
+Treat these as the default success thresholds for the current 4-8 week roadmap:
+
+- `decisionAgreement >= 80%`
+- `queueDrainRate >= 75%`
+- `approvalRate >= 80%`
+- `truthGapCatchRate = 100%`
+- `sessionHopSuccessRate >= 75%`
+- `oversight.humanInterventions <= 2`
+
+These thresholds map the roadmap goals into something a real dry run can pass or miss.
+
 ### Weighted sections
 
 - `decisionQuality` (30)
@@ -96,3 +109,13 @@ The scorer also raises caution flags for patterns that should shape roadmap work
 - keep evaluator notes concrete and example-based
 - compare runs over time to see whether Otto is improving where it matters
 - treat a lower score with strong notes as more useful than a flattering score with weak evidence
+
+## Dry-run loop
+
+1. Run Otto on a real roadmap-relevant task or issue set.
+2. Fill in the scorecard JSON with counts, section scores, flags, and notes.
+3. Run `npm run score:otto-run -- <filled-scorecard.json>`.
+4. Check the overall score, hard-fail gates, caution flags, and per-target pass or miss status.
+5. Turn repeated misses into the next control-plane, review-bar, drift-detection, or cockpit tasks.
+
+This keeps evaluation tied to product-truth outcomes instead of a vague impression that the run felt good.
