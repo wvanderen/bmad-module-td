@@ -166,12 +166,43 @@ export const parseWorkflowResult = (assistantText) => {
   }
 };
 
+const PLACEHOLDER_SUCCESS_PATTERN =
+  /\b(?:still placeholder-heavy|placeholder-heavy delivery|placeholder success|placeholder (?:ui|backend|service|api|flow|integration|implementation|delivery)|mock(?:ed)? success|mock(?:ed)? (?:backend|service|api|data|ui|flow|integration|implementation)|simulat(?:ed|ion) success|simulat(?:ed|ion) (?:backend|service|api|data|ui|flow|integration)|synthetic success|synthetic (?:backend|service|api|data|ui|flow|integration)|stub(?:bed)? success|stub(?:bed)? (?:backend|service|api|data|ui|flow|integration|implementation)|fake success|fake (?:backend|service|api|data|ui|flow|integration)|artifact-only success|scaffold-heavy delivery|demo-only delivery|product core is still missing|core loop not real yet)\b/gi;
+
+const DETECTOR_DESCRIPTION_TERMS =
+  /\b(?:detect(?:ion|or)?|heuristics?|patterns?|regex|checks?|logic|support|handling|guard(?:s)?|carveout(?:s)?)\b/i;
+
+const IMPLEMENTATION_DESCRIPTION_TERMS =
+  /\b(?:add(?:ed|ing)?|implement(?:ed|ing)?|restore(?:d|ing)?|tighten(?:ed|ing)?|preserv(?:ed|ing)?|improv(?:ed|ing)?|extend(?:ed|ing)?|introduc(?:ed|ing)?|describ(?:ed|ing)?)\b/i;
+
+const isDetectorDescriptionContext = (text, start, end) => {
+  const window = text.slice(
+    Math.max(0, start - 48),
+    Math.min(text.length, end + 48),
+  );
+  return (
+    DETECTOR_DESCRIPTION_TERMS.test(window) &&
+    IMPLEMENTATION_DESCRIPTION_TERMS.test(window)
+  );
+};
+
+const hasPlaceholderSuccessEvidence = (text) => {
+  for (const match of text.matchAll(PLACEHOLDER_SUCCESS_PATTERN)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    if (!isDetectorDescriptionContext(text, start, end)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 const EVIDENCE_PATTERNS = [
   {
     signal: "placeholder-success",
     alert: "placeholder success",
-    pattern:
-      /\b(?:still placeholder-heavy|placeholder-heavy delivery|placeholder success|placeholder (?:ui|backend|service|api|flow|integration|implementation|delivery)|mock(?:ed)? success|mock(?:ed)? (?:backend|service|api|data|ui|flow|integration|implementation)|simulat(?:ed|ion) success|simulat(?:ed|ion) (?:backend|service|api|data|ui|flow|integration)|synthetic success|synthetic (?:backend|service|api|data|ui|flow|integration)|stub(?:bed)? success|stub(?:bed)? (?:backend|service|api|data|ui|flow|integration|implementation)|fake success|fake (?:backend|service|api|data|ui|flow|integration)|artifact-only success|scaffold-heavy delivery|demo-only delivery|product core is still missing|core loop not real yet)\b/i,
+    matches: hasPlaceholderSuccessEvidence,
   },
   {
     signal: "runtime-gap",
@@ -209,7 +240,10 @@ export const inspectEvidence = (assistantText, workflowResult = null) => {
   const alerts = [];
 
   for (const candidate of EVIDENCE_PATTERNS) {
-    if (!candidate.pattern.test(text)) continue;
+    const matched = candidate.matches
+      ? candidate.matches(text)
+      : candidate.pattern.test(text);
+    if (!matched) continue;
     signals.push(candidate.signal);
     alerts.push(candidate.alert);
   }
