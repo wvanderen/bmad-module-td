@@ -10,6 +10,7 @@ import type {
 import {
   classifyAction,
   classifyOutcome,
+  inspectEvidence,
   parseIssueId,
   parseIssueTitle,
   resolveWorkflowResult,
@@ -142,6 +143,7 @@ interface Checkpoint {
   continuity: ContinuityKind;
   continuityReason: string | null;
   alert: string | null;
+  evidenceSignals: string[];
   reason: string | null;
   summary: string;
   timestamp: number;
@@ -162,6 +164,8 @@ interface RunState {
   lastOutcome: OutcomeKind | null;
   lastConfidence: ConfidenceKind;
   lastResultSource: ResultSourceKind;
+  lastEvidenceAlert: string | null;
+  lastEvidenceSignals: string[];
   lastCommandMode: WorkflowMode;
   lastContinuation: ContinuityKind;
   lastContinuationReason: string | null;
@@ -196,6 +200,8 @@ const newRunState = (): RunState => ({
   lastOutcome: null,
   lastConfidence: "unknown",
   lastResultSource: null,
+  lastEvidenceAlert: null,
+  lastEvidenceSignals: [],
   lastCommandMode: "accept-default",
   lastContinuation: "none",
   lastContinuationReason: null,
@@ -292,6 +298,10 @@ const checkpointContextLabel = (checkpoint: Checkpoint): string => {
 };
 
 const stateAlert = (runState: RunState): string | null => {
+  if (runState.lastEvidenceAlert) {
+    return runState.lastEvidenceAlert;
+  }
+
   if (runState.lastContinuation === "compaction-fallback") {
     return "continuity fallback";
   }
@@ -909,6 +919,9 @@ export default function otto(pi: ExtensionAPI) {
     ];
 
     if (alert) widgetLines.push(`Alert: ${alert}`);
+    if (state.lastEvidenceSignals.length > 0) {
+      widgetLines.push(`Evidence: ${state.lastEvidenceSignals.join(", ")}`);
+    }
     if (state.stopReason) widgetLines.push(`Reason: ${state.stopReason}`);
     ctx.ui.setWidget("otto", widgetLines);
   };
@@ -1222,11 +1235,27 @@ export default function otto(pi: ExtensionAPI) {
     );
     const workflowResult = resolvedWorkflowResult.result;
     const summary = resolvedWorkflowResult.summary;
+    const evidence = inspectEvidence(assistantText, workflowResult);
     const entryId = ctx.sessionManager.getLeafId();
-    const alert = stateAlert(state);
     const issueId = workflowResult?.issueId ?? parseIssueId(assistantText);
     const issueTitle =
       workflowResult?.issueTitle ?? parseIssueTitle(assistantText, issueId);
+
+    const previousIssueId = state.lastIssueId;
+    state.lastIssueId = issueId ?? state.lastIssueId;
+    state.lastIssueTitle =
+      issueTitle ?? (issueId === previousIssueId ? state.lastIssueTitle : null);
+    state.lastAction = workflowResult?.action ?? classifyAction(assistantText);
+    state.lastOutcome =
+      workflowResult?.outcome ?? classifyOutcome(assistantText);
+    state.lastConfidence = evidence.effectiveConfidence;
+    state.lastResultSource = resolvedWorkflowResult.resultSource;
+    state.lastEvidenceAlert = evidence.alert;
+    state.lastEvidenceSignals = evidence.signals;
+    state.lastProgressAt = Date.now();
+    state.lastError = resolvedWorkflowResult.error;
+
+    const alert = stateAlert(state);
 
     if (entryId) {
       state.checkpoints.push({
@@ -1237,11 +1266,12 @@ export default function otto(pi: ExtensionAPI) {
         issueTitle,
         action: workflowResult?.action ?? classifyAction(assistantText),
         outcome: workflowResult?.outcome ?? classifyOutcome(assistantText),
-        confidence: workflowResult?.confidence ?? "unknown",
+        confidence: evidence.effectiveConfidence,
         queueState: state.queueState,
         continuity: state.lastContinuation,
         continuityReason: state.lastContinuationReason,
         alert,
+        evidenceSignals: evidence.signals,
         reason: state.lastDecisionReason,
         summary,
         timestamp: Date.now(),
@@ -1256,18 +1286,6 @@ export default function otto(pi: ExtensionAPI) {
         `auto:${state.runId ?? "run"}:iter-${state.iteration}`,
       );
     }
-
-    const previousIssueId = state.lastIssueId;
-    state.lastIssueId = issueId ?? state.lastIssueId;
-    state.lastIssueTitle =
-      issueTitle ?? (issueId === previousIssueId ? state.lastIssueTitle : null);
-    state.lastAction = workflowResult?.action ?? classifyAction(assistantText);
-    state.lastOutcome =
-      workflowResult?.outcome ?? classifyOutcome(assistantText);
-    state.lastConfidence = workflowResult?.confidence ?? "unknown";
-    state.lastResultSource = resolvedWorkflowResult.resultSource;
-    state.lastProgressAt = Date.now();
-    state.lastError = resolvedWorkflowResult.error;
 
     if (resolvedWorkflowResult.error) {
       if (registerLoopFailure(ctx, resolvedWorkflowResult.error)) return;
@@ -1366,6 +1384,20 @@ export default function otto(pi: ExtensionAPI) {
       }
 
       state.emptyQueuePasses += 1;
+
+      if (
+        evidence.shouldValidate &&
+        completedCommand !== VALIDATE_PRD_COMMAND
+      ) {
+        state.queueState = "drained-ready-for-validation";
+        persistState("loop-run-validate-prd-evidence-gap");
+        queueWorkflowCommand(
+          ctx,
+          VALIDATE_PRD_COMMAND,
+          `Completion evidence was weak (${evidence.signals.join(", ")}); validate against the PRD before stopping.`,
+        );
+        return;
+      }
 
       if (completedCommand === VALIDATE_PRD_COMMAND) {
         state.queueState = hasInReview ? "in-review-only" : "drained-final";
@@ -1636,6 +1668,11 @@ export default function otto(pi: ExtensionAPI) {
       `Last command: ${state.lastCommand ?? "-"}`,
       `Last outcome: ${state.lastOutcome ?? "-"}`,
       `Confidence: ${state.lastConfidence}`,
+      `Evidence: ${
+        state.lastEvidenceSignals.length > 0
+          ? state.lastEvidenceSignals.join(", ")
+          : "-"
+      }`,
       `Continuity: ${continuityLabel(state.lastContinuation, state.lastContinuationReason)}`,
       `Result source: ${state.lastResultSource ?? "-"}`,
       `Queue state: ${state.queueState}`,
@@ -1777,6 +1814,11 @@ export default function otto(pi: ExtensionAPI) {
           `Continuity: ${continuityLabel(checkpoint.continuity, checkpoint.continuityReason)}`,
           `Queue state: ${checkpoint.queueState}`,
           `Alert: ${checkpoint.alert ?? "-"}`,
+          `Evidence: ${
+            checkpoint.evidenceSignals.length > 0
+              ? checkpoint.evidenceSignals.join(", ")
+              : "-"
+          }`,
           `Why: ${widgetReasonLabel(checkpoint.reason)}`,
           `Summary: ${checkpoint.summary}`,
         ].join("\n"),

@@ -166,6 +166,77 @@ export const parseWorkflowResult = (assistantText) => {
   }
 };
 
+const EVIDENCE_PATTERNS = [
+  {
+    signal: "placeholder-success",
+    alert: "placeholder success",
+    pattern:
+      /\b(?:placeholder|mock(?:ed)?|simulat(?:ed|ion)|synthetic|stub(?:bed)?|fake|artifact-only|scaffold-heavy|demo-only)\b/i,
+  },
+  {
+    signal: "runtime-gap",
+    alert: "weak evidence",
+    pattern:
+      /\b(?:weak evidence|low confidence|runtime (?:proof|truth|evidence) (?:is )?weak|missing runtime evidence|no runtime evidence|artifact-only success|product core is still missing|core loop not real yet)\b/i,
+  },
+  {
+    signal: "prd-gap",
+    alert: "prd gap follow-up",
+    pattern:
+      /\b(?:prd gap|requirements? (?:gap|missing|partial)|follow-up td work|gap task|gap tasks|reopen(?:ed)? .*gap|create td tasks? for .*gap)\b/i,
+  },
+  {
+    signal: "result-drift",
+    alert: "result drift",
+    pattern:
+      /\b(?:drift|false completion|workflow completion diverges|diverges? from (?:actual )?(?:prd|product truth)|product truth.*drift)\b/i,
+  },
+];
+
+const downgradeConfidence = (confidence, severe) => {
+  if (severe) return "low";
+  if (confidence === "high") return "medium";
+  if (confidence === "unknown") return "medium";
+  return confidence;
+};
+
+export const inspectEvidence = (assistantText, workflowResult = null) => {
+  const text = assistantText || "";
+  const inferredOutcome = workflowResult?.outcome ?? classifyOutcome(text);
+  const completedLike =
+    inferredOutcome === "completed" || inferredOutcome === "no-work";
+  const signals = [];
+  const alerts = [];
+
+  for (const candidate of EVIDENCE_PATTERNS) {
+    if (!candidate.pattern.test(text)) continue;
+    signals.push(candidate.signal);
+    alerts.push(candidate.alert);
+  }
+
+  const uniqueSignals = [...new Set(signals)];
+  const severe =
+    uniqueSignals.includes("placeholder-success") ||
+    uniqueSignals.includes("result-drift") ||
+    uniqueSignals.includes("runtime-gap");
+  const confidence = workflowResult?.confidence ?? "unknown";
+
+  return {
+    signals: uniqueSignals,
+    alert: alerts[0] ?? null,
+    completedLike,
+    shouldValidate:
+      completedLike &&
+      (uniqueSignals.includes("placeholder-success") ||
+        uniqueSignals.includes("runtime-gap") ||
+        uniqueSignals.includes("prd-gap") ||
+        uniqueSignals.includes("result-drift")),
+    effectiveConfidence: uniqueSignals.length
+      ? downgradeConfidence(confidence, severe)
+      : confidence,
+  };
+};
+
 export const resolveWorkflowResult = (
   assistantText,
   completedCommand,

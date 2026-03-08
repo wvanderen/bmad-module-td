@@ -72,6 +72,7 @@ Otto currently provides:
 - failure budgets, checkpoints, run state, and monitoring for longer loops
 - fresh-session continuation tools such as dive, fork, and session hopping
 - PRD gap reopening so weak or partial delivery becomes real follow-up work
+- evidence heuristics that flag placeholder, runtime-gap, PRD-gap, and drift language before Otto stops
 - optional workflow-specific steering via `party` mode
 - a packaged `otto` skill resource discoverable by Pi agents
 

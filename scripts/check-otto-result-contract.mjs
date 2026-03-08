@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   classifyAction,
   classifyOutcome,
+  inspectEvidence,
   parseIssueId,
   parseIssueTitle,
   parseWorkflowResult,
@@ -80,6 +81,32 @@ assert.equal(
 );
 assert.equal(classifyOutcome("No open issues remain."), "no-work");
 assert.equal(classifyOutcome("The workflow failed to continue."), "failed");
+assert.deepEqual(
+  inspectEvidence(
+    "Workflow completed, but this is still placeholder-heavy and runtime evidence is weak. Create td gap tasks.",
+    { outcome: "completed", confidence: "high" },
+  ),
+  {
+    signals: ["placeholder-success", "runtime-gap", "prd-gap"],
+    alert: "placeholder success",
+    completedLike: true,
+    shouldValidate: true,
+    effectiveConfidence: "low",
+  },
+);
+assert.deepEqual(
+  inspectEvidence("Completed td-abc123 with strong runtime proof.", {
+    outcome: "completed",
+    confidence: "high",
+  }),
+  {
+    signals: [],
+    alert: null,
+    completedLike: true,
+    shouldValidate: false,
+    effectiveConfidence: "high",
+  },
+);
 assert.equal(parseIssueId("Focus td-abc123 then continue."), "td-abc123");
 assert.equal(parseIssueId("No issue present."), null);
 assert.equal(
