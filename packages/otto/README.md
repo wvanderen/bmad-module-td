@@ -1,6 +1,4 @@
-# Otto
-
-<!-- markdownlint-disable MD033 -->
+<!-- markdownlint-disable MD033 MD041 -->
 <div align="center">
   <pre>██████╗ ████████╗████████╗ ██████╗
 ██╔═══██╗╚══██╔══╝╚══██╔══╝██╔═══██╗
@@ -9,18 +7,51 @@
 ╚██████╔╝   ██║      ██║   ╚██████╔╝
  ╚═════╝    ╚═╝      ╚═╝    ╚═════╝</pre>
 </div>
+<!-- markdownlint-enable MD033 MD041 -->
 
-<p align="center">
-  <img src="./otto.svg" alt="Otto logo" width="240" />
-</p>
-<!-- markdownlint-enable MD033 -->
+Otto is a Pi-native operating layer for running BMAD + `td` delivery
+loops with less babysitting and better judgment.
 
-Otto is the Pi-native operating layer for BMAD + `td` execution.
+If you already use BMAD for planning and `td` for execution, Otto gives
+you an opinionated loop for moving work forward, preserving review
+discipline, and validating whether delivery is actually real.
 
-This package publishes Otto's Pi extension source, packaged skill
-resources, and the automation loop that turns BMAD workflows, `td`
-state, and validation evidence into a tighter closed-loop delivery
-system.
+## Why Use Otto
+
+BMAD and `td` are powerful, but repeated agent-driven execution still
+breaks down in familiar ways:
+
+- the next step is not always chosen well
+- context gets blurry across long runs
+- workflow completion can get mistaken for product completion
+- review discipline weakens when the loop gets fast
+
+Otto exists to close that gap.
+
+What Otto does:
+
+- drives `/bmad:td:initialize`, `/bmad:td:next-step`, and
+  `/bmad:td:validate-prd` as a real operating loop
+- keeps execution centered on current `td` state instead of loose chat
+  history
+- preserves `td` review separation through fresh-session continuation
+- treats runtime evidence and PRD validation as part of delivery, not
+  an afterthought
+- reopens gaps as actionable `td` work instead of silently declaring
+  success
+
+Otto is built for developer AI power users who want a meaningful jump
+in delivery velocity without giving up traceability or product truth.
+
+## Prerequisites
+
+Otto assumes you are already working with:
+
+- [BMAD Method](https://github.com/bmad-code-org/BMAD-METHOD) for PRDs,
+  architecture, epics, and stories
+- [`td`](https://github.com/marcus/td) for issue state, dependencies,
+  handoffs, and review flow
+- Pi as the runtime that hosts the Otto package and skill resources
 
 ## Installation
 
@@ -58,25 +89,18 @@ Common commands:
 - `/bmad:td:next-step`
 - `/bmad:td:validate-prd`
 
-## What Otto Is
+## How Otto Works
 
-Otto is built for developer AI power users who already spend much of
-the day inside coding agents and want a meaningful jump in velocity
-without giving up judgment, traceability, or review discipline.
+Otto's core loop is:
 
-Otto is not:
+1. prepare the workspace
+2. execute the highest-value next step
+3. preserve review separation and context sharpness
+4. validate against the PRD and real runtime behavior
+5. reopen gaps as actionable `td` work
 
-- a generic agent shell
-- a thin slash-command wrapper
-- an autonomy-maximalist system that treats workflow completion as success
-
-Otto is optimized for:
-
-- strong next-step decisions
-- tight, fresh context across loops
-- td review separation and session-aware execution
-- runtime truth over artifact-only completion
-- queue drain with minimal babysitting
+This makes Otto feel less like a prompt bundle and more like an
+operator for BMAD + `td` delivery.
 
 ## What Ships In This Package
 
@@ -88,67 +112,6 @@ Otto is optimized for:
 
 The published package is intentionally shaped to match Pi's package
 model so public users can install it directly with `pi install`.
-
-## Core Loop
-
-Otto's operating loop is:
-
-1. prepare the workspace
-2. execute the highest-value next step
-3. preserve review separation and context sharpness
-4. validate against PRD and real runtime behavior
-5. reopen gaps as actionable td work
-
-This is what makes Otto feel like an operator instead of a prompt bundle.
-
-## Product Principles
-
-When goals conflict, Otto should optimize in this order:
-
-1. decision quality
-2. traceability and confidence
-3. low-friction operator flow
-4. raw speed
-
-Otto trusts evidence in this order:
-
-1. real runtime behavior
-2. direct PRD core-loop validation
-3. human review of the working product
-4. automated tests and checks
-5. workflow and artifact completion signals
-
-That means passing tests can support a claim, but they should not
-outweigh weak product truth.
-
-Approval-grade next-step and review work should also include:
-
-- explicit mapping from changed behavior to PRD, story, or issue requirements
-- clear labeling for simulated, mocked, placeholder, or artifact-only success signals
-- machine-checkable evidence output covering validation context,
-  changed files, gate results, artifact references, risks, and
-  follow-up `td` work
-- downgraded confidence and explicit weak-evidence handling when
-  runtime proof is missing
-
-## Current Capabilities
-
-Otto currently provides:
-
-- automation around `/bmad:td:initialize`, `/bmad:td:next-step`, and `/bmad:td:validate-prd`
-- an onboarding flow via `/otto-onboard` for project-wide Otto preferences
-- workflow wrappers for BMAD planning, execution, and review flows
-- failure budgets, checkpoints, run state, and monitoring for longer loops
-- fresh-session continuation tools such as dive, fork, and session hopping
-- PRD gap reopening so weak or partial delivery becomes real follow-up work
-- evidence heuristics that flag placeholder, runtime-gap, PRD-gap,
-  and drift language before Otto stops
-- `td` drift detection when a workflow claims no remaining work but
-  `td` state still disagrees
-- formalized `delivery`, `explore`, and `custom` autonomy modes with
-  explicit approval, drift, evidence, and steering policies
-- optional workflow-specific steering via `party` mode
-- a packaged `otto` skill resource discoverable by Pi agents
 
 ## Configuration
 
@@ -203,21 +166,29 @@ still shipping the real source in the published Otto package.
 
 ## Roadmap
 
-Otto is on a path from strong orchestration into stronger judgment,
-runtime validation, and product-truth enforcement.
+Otto is still early. The roadmap is intentionally high level and tracks
+what matters most for real-world use.
 
-Near-term roadmap:
+### Done Or In Place
 
-- **Control plane hardening:** replace brittle loop parsing with more
-  structured run signals and clearer stop reasons
-- **Operator cockpit:** surface current `td`, branch, why,
-  confidence, and mode so re-entry is easy
-- **Evidence and review bar:** make runtime proof, PRD mapping, and
-  weak-evidence handling more explicit
-- **Drift and product truth detection:** catch false completion
-  earlier and reopen gaps as real `td` work
-- **Autonomy modes and productization:** sharpen mode defaults,
-  simplify packaging, and reduce prototype seams
+- ✅ automated loop around initialize, next-step, and validate-prd
+- ✅ onboarding and layered project config
+- ✅ fresh-session continuation, checkpoints, and dive tooling
+- ✅ autonomy modes with workflow-specific steering
+- ✅ PRD gap reopening and `td` drift detection
+
+### In Progress
+
+- 🚧 stronger control-plane reliability and clearer run-state signaling
+- 🚧 better operator visibility into current `td`, why, and confidence
+- 🚧 stronger runtime evidence handling and review quality
+- 🚧 cleaner packaging and public-facing productization
+
+### Next Up
+
+- ⏳ better false-completion detection against the real product core
+- ⏳ simpler first-run experience for external Pi users
+- ⏳ sharper defaults for exploratory versus serious delivery work
 
 Working docs:
 
