@@ -12,9 +12,11 @@
 Otto is a Pi-native operating layer for running BMAD + `td` delivery
 loops with less babysitting and better judgment.
 
-If you already use BMAD for planning and `td` for execution, Otto gives
-you an opinionated loop for moving work forward, preserving review
-discipline, and validating whether delivery is actually real.
+BMAD gives AI-assisted development structured planning. `td` gives it
+durable execution state, dependencies, handoffs, and review flow. Otto
+synthesizes them into a closed loop that makes longer autonomous runs
+practical in the first place, then pushes that loop toward stronger
+judgment, cleaner review discipline, and more trustworthy delivery.
 
 ## Why Use Otto
 
@@ -45,9 +47,9 @@ in delivery velocity without giving up traceability or product truth.
 
 ## Prerequisites
 
-Otto assumes you are already working with:
+Otto is built on top of:
 
-- [BMAD Method](https://github.com/bmad-code-org/BMAD-METHOD) for PRDs,
+- [BMAD Method](https://github.com/bmad-code-org/BMAD-METHOD) for creating rich PRDs,
   architecture, epics, and stories
 - [`td`](https://github.com/marcus/td) for issue state, dependencies,
   handoffs, and review flow
