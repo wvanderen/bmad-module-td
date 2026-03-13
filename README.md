@@ -1,114 +1,141 @@
 # BMAD TD Monorepo
 
-Monorepo for:
+This monorepo ships two public packages for teams building with BMAD,
+`td`, and Pi:
 
-- `packages/bmad-module-td` - BMAD td-integration module
-- `packages/otto` - Otto, the Pi extension for autonomous BMAD execution
+- `@wvanderen/bmad-module-td`: the BMAD module that connects
+  planning artifacts to `td` execution state
+- `@wvanderen/otto`: Otto, a Pi-native operating layer for running
+  BMAD + `td` loops with stronger judgment and tighter context
 
-## Overview
+## Why This Repo Exists
 
-This module connects BMAD planning artifacts with td CLI using a focused command model.
+The core idea is simple: `td` is state, BMAD is structure.
 
-**Philosophy:** td is state, BMAD is structure
+- BMAD `.md` files hold planning artifacts such as PRDs,
+  architecture, epics, and stories
+- `td` issues hold execution state such as status, dependencies, handoffs, and reviews
+- sidecar provides observability around the loop
 
-- **BMAD `.md` files** hold structured planning artifacts (epics, stories, architecture)
-- **td issues** hold execution state (status, dependencies, reviews)
-- **sidecar** provides observability
+Together, the module and Otto turn BMAD planning into a more
+operational delivery system instead of a pile of disconnected prompts.
 
-## Installation
+## Packages
+
+### `@wvanderen/bmad-module-td`
+
+The td-integration module adds a focused command set for connecting
+BMAD artifacts to `td` workflows.
+
+Install from npm:
 
 ```bash
-# Install from npm (module package)
 npm install @wvanderen/bmad-module-td
-
-# Or install from local monorepo package path
-npx bmad-method install --custom-content /path/to/repo/packages/bmad-module-td --action update --yes
 ```
 
-**Note:** The `--custom-content` flag is required because this is a community module not yet in the official BMAD registry.
+Install into a BMAD workspace from this repo:
 
-## Requirements
-
-- td CLI installed and initialized
-- Git repository
-- BMM module (planning artifacts)
-
-## Commands
-
-| Command                     | Description                                                                                                       |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `/bmad:td:initialize`       | Accept-default onboarding for greenfield or brownfield projects; sets up BMAD artifacts and td dependency mapping |
-| `/bmad:td:setup-validation` | Configure project validation methodology used as a critical verification gate                                     |
-| `/bmad:td:next-step`        | Unified executor that analyzes workspace state and performs the highest-priority action                           |
-| `/bmad:td:validate-prd`     | Validate completed work against PRD requirements, create td follow-up gaps, and report residual risk              |
-
-## next-step Priority
-
-The `next-step` workflow uses this strict priority order:
-
-1. Reviews (highest)
-2. Implement ready issues
-3. Epic workflows (create-story for empty epics, code-review for completed epics)
-4. PRD validation when no reviewable, ready, or epic-maintenance work remains
-
-`next-step` runs entirely from its workflow instructions and does not depend on an external skill file.
-
-## Completion Validation
-
-When execution work is drained, run `/bmad:td:validate-prd` to compare delivered work against PRD requirements.
-
-- It traces PRD requirements against stories, td issues, and delivered evidence.
-- It creates new td tasks for missing or partial requirements instead of silently declaring completion.
-- If no actionable gaps remain, it reports completion with residual risk and recommended follow-up only when needed.
-
-## Validation Methodology
-
-`setup-validation` creates and maintains a project-specific validation config at `{config:validation_methodology_file}`.
-
-- This is a critical review and implementation gate.
-- Agents must verify changes beyond tests (for example: lint, typecheck, build, smoke, security checks where available).
-- If validation config is missing, `next-step` runs fallback checks and reports reduced confidence.
-
-### Profile-Based Validation Selection
-
-The validation template supports profile-based gate selection so verification can adapt to project type and runtime context.
-
-- Dimensions: `project_type` (`web`, `cli`, `tui`, `hybrid`), `platform` (`linux`, `macos`, `windows`, `cross-platform`), and `requirement_class` (for example `ui-visual`, `api`, `data`).
-- Matching: profiles support explicit values and `*` wildcard matching.
-- Deterministic merge order: sort matching profiles by `priority` ascending, then `id` ascending.
-- Gate conflict rule: when a gate id appears in multiple matching profiles, the first match in deterministic order wins.
-- Fallback: use configured fallback profile; if unavailable, fall back to legacy `gates.mandatory` and `gates.optional` and mark reduced confidence.
-
-Backward compatibility is preserved: existing flat-gate methodology files remain valid without profile sections.
-
-### Visual Evidence Gates
-
-UI-impacting `web` and `hybrid` work must carry visual evidence as part of validation:
-
-- Required gates: `visual-regression`, `contrast`, and `visual-stability` are added to matching UI profiles.
-- Required artifacts: desktop and mobile screenshots, plus command output or an explicit skip rationale for each unavailable visual check.
-- Reduced confidence: if browser automation, screenshot capture, or contrast tooling is unavailable, `next-step` and reviews must mark confidence as reduced and record compensating checks.
-
-### Evidence Output Contract
-
-Validation evidence should stay machine-checkable across implementations and reviews.
-
-- Required fields: validation context, changed files, gate results, artifact references, confidence, risks, and follow-up issues.
-- Approval-grade work should also map changed behavior to PRD, story, or issue requirements and explicitly distinguish real runtime evidence from mocked, simulated, placeholder, or artifact-only signals.
-- Web UI work: include screenshot paths or URLs and visual check outputs.
-- CLI/TUI work: include representative command transcripts, terminal captures, or equivalent runtime evidence.
-
-## Git Commit Standards
-
-- Create the git commit before `td review`.
-- Use lowercase conventional types: `feat`, `fix`, `refactor`, `docs`, `test`, or `chore`.
-- Keep the subject in imperative mood, lowercase after the colon, with no trailing period.
-- Normalize the subject by trimming whitespace, collapsing duplicate spaces, and removing trailing punctuation.
-- Keep the body field order stable: `Task`, `Story`, `td`, implementation bullets, `Tests`, `Refs`.
-
-### Commit Message Format
-
+```bash
+npx bmad-method install --custom-content /path/to/repo/packages/bmad-module-td \
+  --action update --yes
 ```
+
+`--custom-content` is currently required because this is a community
+module rather than an official registry package.
+
+Requirements:
+
+- `td` CLI installed and initialized
+- a Git repository
+- BMAD core planning artifacts from the BMM module
+
+Commands:
+
+- `/bmad:td:initialize`: accept-default onboarding for greenfield or
+  brownfield projects; sets up BMAD artifacts and `td` dependency
+  mapping
+- `/bmad:td:setup-validation`: configures project-specific validation
+  methodology and quality gates
+- `/bmad:td:next-step`: analyzes workspace state and performs the
+  highest-priority delivery action
+- `/bmad:td:validate-prd`: validates delivered work against the PRD,
+  creates `td` gap tasks, and reports residual risk
+
+`/bmad:td:next-step` uses a strict priority order:
+
+1. reviews
+2. ready implementation work
+3. epic maintenance workflows
+4. PRD validation when execution work is otherwise drained
+
+Validation is a first-class gate, not a cleanup step:
+
+- `/bmad:td:setup-validation` creates and maintains the project
+  validation config
+- agents are expected to verify beyond tests where appropriate: lint,
+  typecheck, build, smoke, security, and visual checks
+- if the validation config is missing, fallback checks run and confidence is downgraded
+
+Approval-grade evidence stays machine-checkable and should include
+changed files, gate results, artifact references, confidence, risks,
+and follow-up issues. UI work should carry real visual evidence; CLI
+and TUI work should carry real command evidence.
+
+### `@wvanderen/otto`
+
+Otto is the Pi-native operating layer in this repo. It is built for
+developer AI power users who already work fluently inside coding agents
+and want the next real jump in velocity without giving up review
+discipline or runtime truth.
+
+Install Otto in Pi:
+
+```bash
+pi install npm:@wvanderen/otto
+```
+
+Local package testing:
+
+```bash
+pi install ./packages/otto
+```
+
+Otto is optimized for:
+
+- strong next-step judgment instead of generic long-context wandering
+- fresh-session execution loops that keep context sharp
+- review and approval discipline that respects `td` session separation
+- runtime evidence over artifact-only completion signals
+- queue drain that can reopen PRD gaps as actionable `td` work
+
+Current Otto capabilities include:
+
+- an automation loop around `/bmad:td:initialize`, `/bmad:td:next-step`, and `/bmad:td:validate-prd`
+- `/otto-onboard` for writing project Otto preferences
+- workflow wrappers for BMAD planning, delivery, and review flows
+- run monitoring, failure budgets, checkpoints, and persisted loop state
+- fresh-session continuation with dive and fork tooling
+- layered config from `.otto.json`, `.pi/otto.json`, legacy autopilot
+  files, and `OTTO_CONFIG` or `BMAD_AUTOPILOT_CONFIG`
+- formalized `delivery`, `explore`, and `custom` autonomy modes plus
+  workflow-specific steering such as `party`
+- a packaged `otto` skill resource for Pi agents
+
+For more detail, see `packages/otto/README.md`.
+
+## Commit And Review Standards
+
+- create the git commit before `td review`
+- use lowercase conventional commit types: `feat`, `fix`, `refactor`,
+  `docs`, `test`, or `chore`
+- keep the subject imperative, lowercase after the colon, and free of
+  trailing punctuation
+- keep commit body order stable: `Task`, `Story`, `td`,
+  implementation bullets, `Tests`, `Refs`
+
+Example:
+
+```text
 feat(story-X.Y): brief description
 
 Task: {task description}
@@ -125,104 +152,54 @@ Refs: {td_issue_id}
 
 ## Development
 
-### Workspace Layout
+Workspace layout:
 
-- `packages/bmad-module-td`: BMAD td module source (publishable)
-- `packages/otto`: Otto workspace package for Pi (`@wvanderen/otto`)
-- `examples/pi-extension`: local extension fixture for Pi
+- `packages/bmad-module-td`: publishable BMAD td-integration module
+- `packages/otto`: publishable Pi package for Otto
+- `examples/pi-extension`: local Pi extension fixture and Otto source-of-truth workspace
 
-Operational details: `docs/monorepo-ops.md`
+Operational details live in `docs/monorepo-ops.md`.
 
-### Sync Source -> Installable Mirror
-
-`_bmad/td-integration` is treated as an installable mirror of module source files.
+Common commands:
 
 ```bash
-# Sync source files into _bmad/td-integration mirror
+# Sync module source into the installable _bmad mirror
 npm run sync:module
 
-# Check mirror drift (used in test)
+# Check mirror drift
 npm run sync:check
 
-# Run linting
+# Lint and format checks
 npm run lint
+npm run format:check
 
-# Fix formatting
-npm run format:fix
-
-# Run tests
+# Full repo verification
 npm test
 ```
 
-## Otto
+## Publishing
 
-This repository includes Otto, a Pi-native operating layer for BMAD + td execution:
+```bash
+# Validate both workspace packages before release or CI
+npm run release:check
 
-- `packages/otto`
-- `examples/pi-extension/otto.ts`
-- `examples/pi-extension/README.md`
+# Module release and publish
+npm run release:module:patch
+npm run publish:module
 
-Otto is built for developer AI power users who already work fluently inside coding agents and want the next real jump in velocity.
+# Otto release and publish
+npm run release:otto:patch
+npm run publish:otto
+```
 
-What Otto is optimized for:
-
-- tight, fresh context across repeated execution loops
-- strong next-step judgment instead of generic long-context wandering
-- review and approval discipline that respects td session separation
-- real runtime validation over artifact-only completion signals
-- closed-loop execution that can reopen PRD gaps as actionable td work
-
-Current Otto capabilities include:
-
-- an automation loop for `/bmad:td:initialize -> /bmad:td:next-step -> /bmad:td:validate-prd`
-- a Pi onboarding flow via `/otto-onboard` that writes project-wide Otto preferences
-- workflow wrappers for BMAD planning and review flows
-- workflow monitoring, failure budgets, and persisted run state
-- fresh-session continuation with checkpoint-based dive and fork tools
-- layered JSON preferences from `.otto.json`, `.pi/otto.json`, legacy autopilot config files, and `OTTO_CONFIG`/`BMAD_AUTOPILOT_CONFIG`
-- formalized `delivery`, `explore`, and `custom` autonomy modes with explicit approval, drift, evidence, and steering defaults
-- per-workflow execution modes such as `party` for higher-steering workflows
-- a packaged `otto` SKILL resource for Pi agents
-
-Otto strategy docs:
+## Strategy Docs
 
 - `docs/otto-manifesto.md`
 - `docs/otto-dna-roadmap.md`
 - `docs/otto-roadmap-4-8-weeks.md`
 
-## Publishing
-
-```bash
-# Validate both workspace packages before release/CI
-npm run release:check
-
-# Bump module package version (choose one)
-npm run release:module:patch
-npm run release:module:minor
-npm run release:module:major
-
-# Publish module package
-npm run publish:module
-
-# One-step bump + publish
-npm run release:module:patch:publish
-
-# Bump Otto package version (choose one)
-npm run release:otto:patch
-npm run release:otto:minor
-npm run release:otto:major
-
-# Publish Otto package
-npm run publish:otto
-
-# One-step bump + publish
-npm run release:otto:patch:publish
-```
-
 ## License
 
-MIT License — see LICENSE for details.
-
----
+MIT License - see `LICENSE` for details.
 
 Part of the [BMad Method](https://github.com/bmad-code-org) ecosystem.
