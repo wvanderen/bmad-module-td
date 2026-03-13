@@ -1,6 +1,19 @@
 # Otto
 
-![Otto logo](./otto.svg)
+```text
+ ██████╗ ████████╗████████╗ ██████╗
+██╔═══██╗╚══██╔══╝╚══██╔══╝██╔═══██╗
+██║   ██║   ██║      ██║   ██║   ██║
+██║   ██║   ██║      ██║   ██║   ██║
+╚██████╔╝   ██║      ██║   ╚██████╔╝
+ ╚═════╝    ╚═╝      ╚═╝    ╚═════╝
+```
+
+<!-- markdownlint-disable MD033 -->
+<p align="center">
+  <img src="./otto.svg" alt="Otto logo" width="280" />
+</p>
+<!-- markdownlint-enable MD033 -->
 
 Otto is the Pi-native operating layer for BMAD + `td` execution.
 
